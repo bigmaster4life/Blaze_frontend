@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import axios, { AxiosError } from 'axios';
 import api from '@/utils/api';
@@ -21,7 +21,6 @@ type Vehicle = {
 
 type DRFError = {
   detail?: string;
-  // autres champs potentiels renvoyés par DRF: { field: ["msg1", "msg2"] }
   [field: string]: string | string[] | undefined;
 };
 
@@ -48,7 +47,7 @@ const AddVehiclePage: React.FC = () => {
     fuel_type: 'essence' as Vehicle['fuel_type'],
     seats: 4,
     registration_number: '',
-    daily_price: '', // string dans le formulaire, converti à l’envoi
+    daily_price: '', // string au formulaire, converti à l’envoi
     city: '',
     category: '' as '' | Vehicle['category'],
   });
@@ -58,6 +57,13 @@ const AddVehiclePage: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Nettoyage de l’URL de preview pour éviter les leaks
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -115,8 +121,10 @@ const AddVehiclePage: React.FC = () => {
       formData.append('category', form.category);
       if (image) formData.append('image', image);
 
-      // Header Authorization injecté par l'intercepteur dans api.ts
-      const { data } = await api.post<Vehicle>('vehicles/', formData);
+      // ✅ pas de localStorage ici, l’intercepteur d’api.ts ajoute Authorization
+      const { data } = await api.post<Vehicle>('vehicles/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
 
       setVehicles((prev) => [...prev, data]);
       setSuccess(true);
@@ -134,6 +142,7 @@ const AddVehiclePage: React.FC = () => {
         category: '',
       });
       setImage(null);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
     } catch (err: unknown) {
       let message = "Erreur lors de l'ajout du véhicule.";
