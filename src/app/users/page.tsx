@@ -27,7 +27,10 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (!ALLOWED_ROLES.includes(user.user_type)) {
+    const role = user?.user_type ?? '';
+
+    const ALLOWED_ROLES: string[] = ['manager_staff', 'employee_staff', 'loueur'];
+    if (!role || !ALLOWED_ROLES.includes(role)) {
       router.push('/');
     }
   }, [user, router]);
