@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+console.log('[Auth] API_BASE =', (process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api').replace(/\/+$/,''));
 
 // ——— Types
 interface User {
@@ -134,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // POST /token/ (email + password)
   const login = useCallback(async (email: string, password: string) => {
+    console.log('[Auth] login → TOKEN endpoint =', TOKEN);
     const res = await fetch(TOKEN, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -141,10 +143,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!res.ok) {
+      let detail = '';
+      try { detail = JSON.stringify(await res.json()); } catch {}
+      console.error('[Auth] login failed', res.status, res.statusText, detail);
       let msg = 'Identifiants invalides';
       try {
-        const j: unknown = await res.json();
-        if (isErrorResponse(j)) {
+        const j: unknown = detail ? JSON.parse(detail) : undefined;
+        if (j && typeof j === 'object' && ('detail' in j || 'message' in j)) {
+          // @ts-expect-error TS2345
           msg = j.detail || j.message || msg;
         }
       } catch {

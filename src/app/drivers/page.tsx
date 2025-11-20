@@ -43,23 +43,8 @@ export default function DriversPage() {
   // état de chargement par chauffeur pour le renvoi d’invitation
   const [resendLoadingMap, setResendLoadingMap] = useState<Record<number, boolean>>({});
 
-  // ---- Contrôle d'accès UI
-  const role = user?.user_type ?? '';
-  // élargir la liste selon tes rôles existants côté backend
-  const ALLOWED_ROLES = new Set([
-    'manager_staff',
-    'employee_staff',
-    'admin_staff',
-    'owner_staff',
-  ]);
-
-  // certains backends renvoient aussi is_staff / is_superuser
-  const isStaffFlag =
-    (user && (user as unknown as { is_staff?: boolean })?.is_staff) === true;
-  const isSuperuserFlag =
-    (user && (user as unknown as { is_superuser?: boolean })?.is_superuser) === true;
-
-  const canAccessDrivers = ALLOWED_ROLES.has(role) || isStaffFlag || isSuperuserFlag;
+  const isManager = user?.user_type === 'manager_staff';
+  const isEmployee = user?.user_type === 'employee_staff';
 
   const fetchDrivers = async () => {
     try {
@@ -67,18 +52,11 @@ export default function DriversPage() {
       setDrivers(response.data || []);
     } catch (err: unknown) {
       if (isAxiosError(err)) {
-        // Distinguo utile pour le debug: 401/403 vs autres erreurs
-        if (err.response?.status === 401) {
-          setError('Non authentifié (401). Veuillez vous reconnecter.');
-        } else if (err.response?.status === 403) {
-          setError("Accès refusé par l'API (403). Votre compte n'a pas le rôle requis.");
-        } else {
-          const msg =
-            typeof err.response?.data === 'string'
-              ? err.response.data
-              : 'Erreur lors du chargement des chauffeurs';
-          setError(msg);
-        }
+        const msg =
+          typeof err.response?.data === 'string'
+            ? err.response.data
+            : 'Erreur lors du chargement des chauffeurs';
+        setError(msg);
       } else {
         setError('Erreur lors du chargement des chauffeurs');
       }
@@ -88,15 +66,12 @@ export default function DriversPage() {
   };
 
   useEffect(() => {
-    if (canAccessDrivers) {
+    if (isManager || isEmployee) {
       fetchDrivers();
       const interval = setInterval(fetchDrivers, 30000);
       return () => clearInterval(interval);
-    } else {
-      setLoading(false);
     }
-    
-  }, [canAccessDrivers]);
+  }, [isManager, isEmployee]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -136,23 +111,20 @@ export default function DriversPage() {
         category: '',
       });
 
-      if (canAccessDrivers) fetchDrivers();
+      if (isManager) fetchDrivers();
     } catch (err: unknown) {
       let detail = "Erreur lors de l'ajout du chauffeur";
       if (isAxiosError(err)) {
-        if (err.response?.status === 403) {
-          detail = "Accès refusé (403). Votre rôle n'autorise pas cette action.";
-        } else {
-          const d = err.response?.data;
-          if (typeof d === 'string') detail = d;
-          else if (d && typeof d === 'object') detail = JSON.stringify(d);
-        }
+        const d = err.response?.data;
+        if (typeof d === 'string') detail = d;
+        else if (d && typeof d === 'object') detail = JSON.stringify(d);
       }
       setFormError(detail);
     }
   };
 
   const resendInvite = async (driverId: number) => {
+    // reset messages globaux
     setFormSuccess(null);
     setFormError(null);
 
@@ -168,16 +140,14 @@ export default function DriversPage() {
           ? ` (Email non envoyé: ${data.email_error})`
           : '';
       setFormSuccess(`${detail}${suffix}`);
+
+      // en dev (EMAIL_BACKEND console), le mot de passe temporaire est visible dans la console du serveur Django
     } catch (err: unknown) {
-      let detail = 'Échec du renvoi de l’invitation';
+      let detail = "Échec du renvoi de l'invitation";
       if (isAxiosError(err)) {
-        if (err.response?.status === 403) {
-          detail = "Accès refusé (403). Votre rôle n'autorise pas cette action.";
-        } else {
-          const d = err.response?.data;
-          if (typeof d === 'string') detail = d;
-          else if (d && typeof d === 'object') detail = JSON.stringify(d);
-        }
+        const d = err.response?.data;
+        if (typeof d === 'string') detail = d;
+        else if (d && typeof d === 'object') detail = JSON.stringify(d);
       }
       setFormError(detail);
     } finally {
@@ -189,25 +159,11 @@ export default function DriversPage() {
     }
   };
 
-  if (!user) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-8 text-center">
-        <p className="text-red-600 text-lg font-semibold">
-          {"Non connecté – merci de vous authentifier."}
-        </p>
-      </div>
-    );
-  }
-
-  if (!canAccessDrivers) {
+  if (!user || (!isManager && !isEmployee)) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8 text-center">
         <p className="text-red-600 text-lg font-semibold">
           {"Accès refusé – vous n'avez pas les droits nécessaires."}
-        </p>
-        <p className="text-sm text-gray-500 mt-2">
-          Rôle actuel : <strong>{role || 'inconnu'}</strong>
-          {isStaffFlag ? ' (is_staff)' : ''}{isSuperuserFlag ? ' (superuser)' : ''}
         </p>
       </div>
     );
@@ -302,80 +258,81 @@ export default function DriversPage() {
         {formError && <p className="text-red-600">{formError}</p>}
       </form>
 
-      {/* Liste des chauffeurs visible pour les rôles autorisés */}
-      <>
-        <h2 className="text-2xl font-bold mb-4">Liste des chauffeurs</h2>
-        {loading ? (
-          <p>Chargement...</p>
-        ) : error ? (
-          <p className="text-red-600">{error}</p>
-        ) : drivers.length === 0 ? (
-          <p>Aucun chauffeur pour le moment.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border rounded text-sm">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="p-2 text-left">Nom</th>
-                  <th className="p-2 text-left">Email</th>
-                  <th className="p-2 text-left">Téléphone</th>
-                  <th className="p-2 text-left">Plaque</th>
-                  <th className="p-2 text-left">Catégorie</th>
-                  <th className="p-2 text-left">Créé le</th>
-                  <th className="p-2 text-left">Onboarding</th>
-                  <th className="p-2 text-left">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {drivers.map((d) => {
-                  const isSending = !!resendLoadingMap[d.id];
-                  return (
-                    <tr key={d.id} className="border-t">
-                      <td className="p-2">{d.full_name || '—'}</td>
-                      <td className="p-2">{d.email}</td>
-                      <td className="p-2">{d.phone}</td>
-                      <td className="p-2">{d.vehicle_plate || '—'}</td>
-                      <td className="p-2 uppercase">{d.category || '—'}</td>
-                      <td className="p-2">
-                        {d.created_at ? new Date(d.created_at).toLocaleString() : '—'}
-                      </td>
-                      <td className="p-2">
-                        {d.onboarding_completed ? (
-                          <span className="text-green-700 font-semibold">OK</span>
-                        ) : (
-                          <span className="text-yellow-700 font-semibold">En attente</span>
-                        )}
-                      </td>
-                      <td className="p-2 flex items-center gap-2">
-                        <Link
-                          href={`/drivers/${d.id}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          Voir
-                        </Link>
+      {isManager && (
+        <>
+          <h2 className="text-2xl font-bold mb-4">Liste des chauffeurs</h2>
+          {loading ? (
+            <p>Chargement...</p>
+          ) : error ? (
+            <p className="text-red-600">{error}</p>
+          ) : drivers.length === 0 ? (
+            <p>Aucun chauffeur pour le moment.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full border rounded text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="p-2 text-left">Nom</th>
+                    <th className="p-2 text-left">Email</th>
+                    <th className="p-2 text-left">Téléphone</th>
+                    <th className="p-2 text-left">Plaque</th>
+                    <th className="p-2 text-left">Catégorie</th>
+                    <th className="p-2 text-left">Créé le</th>
+                    <th className="p-2 text-left">Onboarding</th>
+                    <th className="p-2 text-left">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drivers.map((d) => {
+                    const isSending = !!resendLoadingMap[d.id];
+                    return (
+                      <tr key={d.id} className="border-t">
+                        <td className="p-2">{d.full_name || '—'}</td>
+                        <td className="p-2">{d.email}</td>
+                        <td className="p-2">{d.phone}</td>
+                        <td className="p-2">{d.vehicle_plate || '—'}</td>
+                        <td className="p-2 uppercase">{d.category || '—'}</td>
+                        <td className="p-2">
+                          {d.created_at ? new Date(d.created_at).toLocaleString() : '—'}
+                        </td>
+                        <td className="p-2">
+                          {d.onboarding_completed ? (
+                            <span className="text-green-700 font-semibold">OK</span>
+                          ) : (
+                            <span className="text-yellow-700 font-semibold">En attente</span>
+                          )}
+                        </td>
+                        <td className="p-2 flex items-center gap-2">
+                          <Link
+                            href={`/drivers/${d.id}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            Voir
+                          </Link>
 
-                        <button
-                          type="button"
-                          onClick={() => resendInvite(d.id)}
-                          disabled={isSending}
-                          className={`text-white px-3 py-1 rounded transition ${
-                            isSending
-                              ? 'bg-indigo-300 cursor-not-allowed'
-                              : 'bg-indigo-600 hover:bg-indigo-700'
-                          }`}
-                          title="Renvoyer l’invitation (régénère un mot de passe temporaire)"
-                        >
-                          {isSending ? 'Envoi…' : 'Renvoyer invitation'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </>
+                          <button
+                            type="button"
+                            onClick={() => resendInvite(d.id)}
+                            disabled={isSending}
+                            className={`text-white px-3 py-1 rounded transition ${
+                              isSending
+                                ? 'bg-indigo-300 cursor-not-allowed'
+                                : 'bg-indigo-600 hover:bg-indigo-700'
+                            }`}
+                            title="Renvoyer l’invitation (régénère un mot de passe temporaire)"
+                          >
+                            {isSending ? 'Envoi…' : 'Renvoyer invitation'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
