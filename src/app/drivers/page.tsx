@@ -19,6 +19,8 @@ interface DriverRow {
   must_reset_password?: boolean;
   onboarding_completed?: boolean;
   created_at?: string;
+  is_blocked?: boolean;
+  block_reason?: string;
 }
 
 export default function DriversPage() {
@@ -40,8 +42,10 @@ export default function DriversPage() {
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // état de chargement par chauffeur pour le renvoi d’invitation
+  // chargement par chauffeur pour renvoi d’invitation
   const [resendLoadingMap, setResendLoadingMap] = useState<Record<number, boolean>>({});
+  // chargement par chauffeur pour blocage/déblocage
+  const [blockLoadingMap, setBlockLoadingMap] = useState<Record<number, boolean>>({});
 
   const isManager = user?.user_type === 'manager_staff';
   const isEmployee = user?.user_type === 'employee_staff';
@@ -50,6 +54,7 @@ export default function DriversPage() {
     try {
       const response = await api.get<DriverRow[]>('/drivers/');
       setDrivers(response.data || []);
+      setError(null);
     } catch (err: unknown) {
       if (isAxiosError(err)) {
         const msg =
@@ -124,7 +129,6 @@ export default function DriversPage() {
   };
 
   const resendInvite = async (driverId: number) => {
-    // reset messages globaux
     setFormSuccess(null);
     setFormError(null);
 
@@ -140,8 +144,6 @@ export default function DriversPage() {
           ? ` (Email non envoyé: ${data.email_error})`
           : '';
       setFormSuccess(`${detail}${suffix}`);
-
-      // en dev (EMAIL_BACKEND console), le mot de passe temporaire est visible dans la console du serveur Django
     } catch (err: unknown) {
       let detail = "Échec du renvoi de l'invitation";
       if (isAxiosError(err)) {
@@ -154,6 +156,62 @@ export default function DriversPage() {
       setResendLoadingMap((m) => {
         const rest = { ...m };
         delete rest[driverId];
+        return rest;
+      });
+    }
+  };
+
+  const toggleBlock = async (driver: DriverRow) => {
+    setFormSuccess(null);
+    setFormError(null);
+
+    const currentlyBlocked = !!driver.is_blocked;
+    let reason = driver.block_reason || '';
+
+    // Si on bloque, demander un motif
+    if (!currentlyBlocked) {
+      const input = window.prompt('Motif du blocage (obligatoire) :', reason);
+      if (!input || !input.trim()) {
+        return;
+      }
+      reason = input.trim();
+    }
+
+    setBlockLoadingMap((m) => ({ ...m, [driver.id]: true }));
+
+    try {
+      await api.post(`/drivers/${driver.id}/block/`, {
+        is_blocked: !currentlyBlocked,
+        block_reason: currentlyBlocked ? '' : reason,
+      });
+
+      setDrivers((prev) =>
+        prev.map((d) =>
+          d.id === driver.id
+            ? {
+                ...d,
+                is_blocked: !currentlyBlocked,
+                block_reason: currentlyBlocked ? '' : reason,
+              }
+            : d
+        )
+      );
+
+      setFormSuccess(
+        !currentlyBlocked ? 'Chauffeur bloqué.' : 'Chauffeur débloqué.'
+      );
+    } catch (err: unknown) {
+      let detail = "Erreur lors de la mise à jour du statut du chauffeur";
+      if (isAxiosError(err)) {
+        const d = err.response?.data;
+        if (typeof d === 'string') detail = d;
+        else if (d && typeof d === 'object') detail = JSON.stringify(d);
+      }
+      setFormError(detail);
+    } finally {
+      setBlockLoadingMap((m) => {
+        const rest = { ...m };
+        delete rest[driver.id];
         return rest;
       });
     }
@@ -254,8 +312,8 @@ export default function DriversPage() {
           Enregistrer & envoyer l’invitation
         </button>
 
-        {formSuccess && <p className="text-green-600">{formSuccess}</p>}
-        {formError && <p className="text-red-600">{formError}</p>}
+        {formSuccess && <p className="text-green-600 mt-2">{formSuccess}</p>}
+        {formError && <p className="text-red-600 mt-2">{formError}</p>}
       </form>
 
       {isManager && (
@@ -279,12 +337,15 @@ export default function DriversPage() {
                     <th className="p-2 text-left">Catégorie</th>
                     <th className="p-2 text-left">Créé le</th>
                     <th className="p-2 text-left">Onboarding</th>
+                    <th className="p-2 text-left">Statut</th>
                     <th className="p-2 text-left">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {drivers.map((d) => {
                     const isSending = !!resendLoadingMap[d.id];
+                    const isBlocking = !!blockLoadingMap[d.id];
+
                     return (
                       <tr key={d.id} className="border-t">
                         <td className="p-2">{d.full_name || '—'}</td>
@@ -300,6 +361,16 @@ export default function DriversPage() {
                             <span className="text-green-700 font-semibold">OK</span>
                           ) : (
                             <span className="text-yellow-700 font-semibold">En attente</span>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          {d.is_blocked ? (
+                            <span className="text-red-700 font-semibold">
+                              Bloqué
+                              {d.block_reason ? ` (${d.block_reason})` : ''}
+                            </span>
+                          ) : (
+                            <span className="text-green-700 font-semibold">Actif</span>
                           )}
                         </td>
                         <td className="p-2 flex items-center gap-2">
@@ -322,6 +393,23 @@ export default function DriversPage() {
                             title="Renvoyer l’invitation (régénère un mot de passe temporaire)"
                           >
                             {isSending ? 'Envoi…' : 'Renvoyer invitation'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleBlock(d)}
+                            disabled={isBlocking}
+                            className={`text-white px-3 py-1 rounded transition ${
+                              d.is_blocked
+                                ? 'bg-green-600 hover:bg-green-700'
+                                : 'bg-red-600 hover:bg-red-700'
+                            } ${isBlocking ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          >
+                            {isBlocking
+                              ? '...'
+                              : d.is_blocked
+                              ? 'Débloquer'
+                              : 'Bloquer'}
                           </button>
                         </td>
                       </tr>
