@@ -28,8 +28,8 @@ type Rental = {
   created_at?: string;
 
   // 🔹 Infos client (si exposées par le serializer)
-  renter_phone?: string | null;
-  renter_name?: string | null;
+  customer_phone?: string | null;
+  customer_name?: string | null;
 };
 
 type Vehicle = {
@@ -464,8 +464,8 @@ export default function LocationsPage() {
                 const ownerPhoneRow = vrow?.owner_phone || '—';
                 const ownerNameRow = vrow?.owner_name || '';
 
-                const renterPhoneRow = r.renter_phone || '—';
-                const renterNameRow = r.renter_name || '';
+                const renterPhoneRow = r.customer_phone || '—';
+                const renterNameRow = r.customer_name || '';
 
                 return (
                   <tr
@@ -644,18 +644,18 @@ export default function LocationsPage() {
                 <div>
                   <div className="text-slate-500">Client</div>
                   <div className="font-medium">
-                    {selected.renter_name
-                      ? `${selected.renter_name} — `
+                    {selected.customer_name
+                      ? `${selected.customer_name} — `
                       : ''}
-                    {selected.renter_phone ? (
+                    {selected.customer_phone ? (
                       <a
                         className="text-blue-600 hover:underline"
-                        href={`tel:${selected.renter_phone.replace(
+                        href={`tel:${selected.customer_phone.replace(
                           /\s+/g,
                           ''
                         )}`}
                       >
-                        {selected.renter_phone}
+                        {selected.customer_phone}
                       </a>
                     ) : (
                       '—'
