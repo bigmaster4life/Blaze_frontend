@@ -16,8 +16,8 @@ type RentalStatus =
 
 type Rental = {
   id: number;
-  vehicle: number;         // id véhicule
-  user: number;            // id user
+  vehicle: number; // id véhicule
+  user: number; // id user
   start_date: string;
   end_date: string;
   status: RentalStatus;
@@ -26,6 +26,10 @@ type Rental = {
   hold_expires_at?: string | null;
   identification_code?: string | null;
   created_at?: string;
+
+  // 🔹 Infos client (si exposées par le serializer)
+  renter_phone?: string | null;
+  renter_name?: string | null;
 };
 
 type Vehicle = {
@@ -38,7 +42,7 @@ type Vehicle = {
   image?: string | null;
   daily_price?: string | number;
   owner_phone?: string | null; // exposé par le serializer
-  owner_name?: string | null;  // ⬅️ si dispo côté backend, on l’affiche
+  owner_name?: string | null; // ⬅️ si dispo côté backend, on l’affiche
 };
 
 type DRFPaginated<T> = {
@@ -57,7 +61,7 @@ function hasDetail(obj: unknown): obj is { detail?: unknown } {
 }
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api')
-  .replace(/\/+$/,''); // .../api
+  .replace(/\/+$/, ''); // .../api
 
 // --- util fetch JSON avec Bearer ---
 async function getJSON<T>(
@@ -68,10 +72,13 @@ async function getJSON<T>(
   if (!access) throw new Error('NO_TOKEN');
   const qs = params
     ? `?${new URLSearchParams(
-        Object.entries(params).reduce<Record<string, string>>((acc, [k, v]) => {
-          if (v !== undefined && v !== null) acc[k] = String(v);
-          return acc;
-        }, {})
+        Object.entries(params).reduce<Record<string, string>>(
+          (acc, [k, v]) => {
+            if (v !== undefined && v !== null) acc[k] = String(v);
+            return acc;
+          },
+          {}
+        )
       ).toString()}`
     : '';
   const res = await fetch(`${API_BASE}${path}${qs}`, {
@@ -82,10 +89,16 @@ async function getJSON<T>(
     let reason = `HTTP_${res.status}`;
     try {
       const j: unknown = await res.json();
-      if (hasDetail(j) && typeof j.detail === 'string' && j.detail.trim()) {
+      if (
+        hasDetail(j) &&
+        typeof j.detail === 'string' &&
+        j.detail.trim()
+      ) {
         reason = j.detail;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     throw new Error(reason);
   }
   return (await res.json()) as T;
@@ -110,10 +123,16 @@ async function postJSON<T>(
     let reason = `HTTP_${res.status}`;
     try {
       const j: unknown = await res.json();
-      if (hasDetail(j) && typeof j.detail === 'string' && j.detail.trim()) {
+      if (
+        hasDetail(j) &&
+        typeof j.detail === 'string' &&
+        j.detail.trim()
+      ) {
         reason = j.detail;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     throw new Error(reason);
   }
   // certains endpoints peuvent renvoyer 204 (vide)
@@ -126,7 +145,11 @@ async function postJSON<T>(
 
 function currencyXAF(n?: string | number | null) {
   const val = Number(n ?? 0);
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 }).format(val);
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'XAF',
+    maximumFractionDigits: 0,
+  }).format(val);
 }
 
 function StatusPill({ status }: { status: RentalStatus }) {
@@ -139,8 +162,33 @@ function StatusPill({ status }: { status: RentalStatus }) {
     expired: 'bg-slate-100 text-slate-700',
   };
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded ${map[status]}`}>{status}</span>
+    <span className={`inline-flex px-2 py-0.5 rounded ${map[status]}`}>
+      {status}
+    </span>
   );
+}
+
+// 🔹 Formatage logique de la méthode de paiement
+function formatPaymentMethod(r: Rental): string {
+  if (!r.payment_method) return '—';
+
+  // Cash ne doit pas apparaître tant que ce n'est pas confirmé
+  if (r.payment_method === 'cash' && r.status === 'pending') {
+    return '—';
+  }
+
+  if (r.payment_method === 'mobile') {
+    const base = 'Mobile Money';
+    if (['confirmed', 'in_progress', 'finished'].includes(r.status)) {
+      return `${base} (payé)`;
+    }
+    return base;
+  }
+
+  if (r.payment_method === 'wallet') return 'Wallet';
+  if (r.payment_method === 'cash') return 'Cash';
+
+  return r.payment_method;
 }
 
 export default function LocationsPage() {
@@ -150,7 +198,10 @@ export default function LocationsPage() {
     const to = new Date();
     const from = new Date();
     from.setDate(to.getDate() - 30);
-    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+    return {
+      from: from.toISOString().slice(0, 10),
+      to: to.toISOString().slice(0, 10),
+    };
   });
 
   const [loading, setLoading] = useState(false);
@@ -163,7 +214,7 @@ export default function LocationsPage() {
   const [selected, setSelected] = useState<Rental | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [actionLoading, setActionLoading] =
-    useState<'confirm_cash'|'start'|'finish'|'cancel'|null>(null);
+    useState<'confirm_cash' | 'start' | 'finish' | 'cancel' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const params = useMemo(
@@ -173,7 +224,8 @@ export default function LocationsPage() {
 
   const explain = (e: unknown) => {
     if (e instanceof Error) {
-      if (e.message === 'NO_TOKEN') return "Non authentifié : connectez-vous pour accéder aux locations.";
+      if (e.message === 'NO_TOKEN')
+        return 'Non authentifié : connectez-vous pour accéder aux locations.';
       return e.message;
     }
     return 'Erreur inconnue.';
@@ -184,13 +236,19 @@ export default function LocationsPage() {
     setErrMsg(null);
     try {
       // 1) Récupère les rentals (tolérant pagination DRF)
-      const payload = await getJSON<DRFPaginated<Rental> | Rental[]>('/rental/', params);
-      const rentals: Rental[] = isPaginated(payload) ? payload.results : payload;
+      const payload = await getJSON<DRFPaginated<Rental> | Rental[]>(
+        '/rental/',
+        params
+      );
+      const rentals: Rental[] = isPaginated(payload)
+        ? payload.results
+        : payload;
       setRows(rentals);
 
       // 2) Récupère les véhicules manquants
-      const neededVehicleIds = Array.from(new Set(rentals.map(r => r.vehicle)))
-        .filter((id) => !vehicles[id]);
+      const neededVehicleIds = Array.from(
+        new Set(rentals.map((r) => r.vehicle))
+      ).filter((id) => !vehicles[id]);
       if (neededVehicleIds.length) {
         const fetched: Record<number, Vehicle> = { ...vehicles };
         await Promise.all(
@@ -198,7 +256,9 @@ export default function LocationsPage() {
             try {
               const v = await getJSON<Vehicle>(`/vehicles/${id}/`);
               fetched[id] = v;
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           })
         );
         setVehicles(fetched);
@@ -206,10 +266,9 @@ export default function LocationsPage() {
 
       // Rafraîchir l’élément sélectionné si le drawer est ouvert
       if (drawerOpen && selected) {
-        const fresh = rentals.find(r => r.id === selected.id) || null;
+        const fresh = rentals.find((r) => r.id === selected.id) || null;
         setSelected(fresh);
       }
-
     } catch (e: unknown) {
       setErrMsg(explain(e));
     } finally {
@@ -234,68 +293,79 @@ export default function LocationsPage() {
   }, []);
 
   // -------- Actions back-office avec update optimiste --------
-  type ActionResponse = Partial<Pick<Rental,
-    'status' | 'total_amount' | 'identification_code'>>;
+  type ActionResponse = Partial<
+    Pick<Rental, 'status' | 'total_amount' | 'identification_code'>
+  >;
 
-  const doAction = useCallback(async (action: 'confirm_cash'|'start'|'finish'|'cancel') => {
-    if (!selected) return;
-    setActionError(null);
-    setActionLoading(action);
-    try {
-      const resp = await postJSON<ActionResponse>(
-        `/rental/${selected.id}/${action}/`,
-        action === 'confirm_cash' ? {} : undefined
-      );
+  const doAction = useCallback(
+    async (action: 'confirm_cash' | 'start' | 'finish' | 'cancel') => {
+      if (!selected) return;
+      setActionError(null);
+      setActionLoading(action);
+      try {
+        const resp = await postJSON<ActionResponse>(
+          `/rental/${selected.id}/${action}/`,
+          action === 'confirm_cash' ? {} : undefined
+        );
 
-      // 1) mise à jour optimiste sur selected
-      setSelected((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          ...(resp.status ? { status: resp.status } : null),
-          ...(typeof resp.total_amount !== 'undefined' ? { total_amount: resp.total_amount } : null),
-          ...(typeof resp.identification_code !== 'undefined'
+        // 1) mise à jour optimiste sur selected
+        setSelected((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            ...(resp.status ? { status: resp.status } : null),
+            ...(typeof resp.total_amount !== 'undefined'
+              ? { total_amount: resp.total_amount }
+              : null),
+            ...(typeof resp.identification_code !== 'undefined'
               ? { identification_code: resp.identification_code }
               : null),
-        };
-      });
+          };
+        });
 
-      // 2) mise à jour optimiste dans la liste
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === selected.id
-            ? {
-                ...r,
-                ...(resp.status ? { status: resp.status } : null),
-                ...(typeof resp.total_amount !== 'undefined'
+        // 2) mise à jour optimiste dans la liste
+        setRows((prev) =>
+          prev.map((r) =>
+            r.id === selected.id
+              ? {
+                  ...r,
+                  ...(resp.status ? { status: resp.status } : null),
+                  ...(typeof resp.total_amount !== 'undefined'
                     ? { total_amount: resp.total_amount }
                     : null),
-                ...(typeof resp.identification_code !== 'undefined'
+                  ...(typeof resp.identification_code !== 'undefined'
                     ? { identification_code: resp.identification_code }
                     : null),
-              }
-            : r
-        )
-      );
+                }
+              : r
+          )
+        );
 
-      // 3) rechargement serveur pour verrouiller l'état réel
-      await load();
-    } catch (e: unknown) {
-      setActionError(explain(e));
-    } finally {
-      setActionLoading(null);
-    }
-  }, [selected, load]);
+        // 3) rechargement serveur pour verrouiller l'état réel
+        await load();
+      } catch (e: unknown) {
+        setActionError(explain(e));
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [selected, load]
+  );
 
   const v = selected ? vehicles[selected.vehicle] : null;
   const ownerPhone = v?.owner_phone || '—';
   const ownerName = v?.owner_name || '';
 
   // Règles d’affichage des actions (cohérentes avec le backend)
-  const canConfirmCash = selected?.status === 'pending' || selected?.status === 'confirmed';
-  const canStart      = selected?.status === 'confirmed' || selected?.status === 'in_progress';
-  const canFinish     = selected?.status === 'in_progress' || selected?.status === 'confirmed';
-  const canCancel     = selected ? !['finished','canceled','expired'].includes(selected.status) : false;
+  const canConfirmCash =
+    selected?.status === 'pending' || selected?.status === 'confirmed';
+  const canStart =
+    selected?.status === 'confirmed' || selected?.status === 'in_progress';
+  const canFinish =
+    selected?.status === 'in_progress' || selected?.status === 'confirmed';
+  const canCancel = selected
+    ? !['finished', 'canceled', 'expired'].includes(selected.status)
+    : false;
 
   return (
     <div className="space-y-6">
@@ -326,7 +396,9 @@ export default function LocationsPage() {
             type="date"
             className="border rounded px-3 py-2"
             value={range.from}
-            onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
+            onChange={(e) =>
+              setRange((r) => ({ ...r, from: e.target.value }))
+            }
           />
         </div>
         <div>
@@ -335,7 +407,9 @@ export default function LocationsPage() {
             type="date"
             className="border rounded px-3 py-2"
             value={range.to}
-            onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
+            onChange={(e) =>
+              setRange((r) => ({ ...r, to: e.target.value }))
+            }
           />
         </div>
         <button
@@ -362,6 +436,7 @@ export default function LocationsPage() {
               <th className="px-3 py-2">#</th>
               <th className="px-3 py-2">Dates</th>
               <th className="px-3 py-2">Statut</th>
+              <th className="px-3 py-2">Client (nom / tél)</th>
               <th className="px-3 py-2">Véhicule</th>
               <th className="px-3 py-2">Proprio (nom / tél)</th>
               <th className="px-3 py-2">Montant</th>
@@ -372,7 +447,10 @@ export default function LocationsPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td className="px-3 py-6 text-center text-gray-500" colSpan={8}>
+                <td
+                  className="px-3 py-6 text-center text-gray-500"
+                  colSpan={9}
+                >
                   Aucune location sur la période.
                 </td>
               </tr>
@@ -382,8 +460,13 @@ export default function LocationsPage() {
                 const title = vrow
                   ? `${vrow.brand} ${vrow.model} (${vrow.registration_number})`
                   : `#${r.vehicle}`;
+
                 const ownerPhoneRow = vrow?.owner_phone || '—';
                 const ownerNameRow = vrow?.owner_name || '';
+
+                const renterPhoneRow = r.renter_phone || '—';
+                const renterNameRow = r.renter_name || '';
+
                 return (
                   <tr
                     key={r.id}
@@ -402,10 +485,34 @@ export default function LocationsPage() {
                     <td className="px-3 py-2">
                       <StatusPill status={r.status} />
                     </td>
+                    <td className="px-3 py-2">
+                      {renterNameRow ? `${renterNameRow} — ` : ''}
+                      {renterPhoneRow !== '—' ? (
+                        <a
+                          className="text-blue-600 hover:underline"
+                          href={`tel:${renterPhoneRow.replace(/\s+/g, '')}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {renterPhoneRow}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-3 py-2">{title}</td>
                     <td className="px-3 py-2">
                       {ownerNameRow ? `${ownerNameRow} — ` : ''}
-                      {ownerPhoneRow}
+                      {ownerPhoneRow !== '—' ? (
+                        <a
+                          className="text-blue-600 hover:underline"
+                          href={`tel:${ownerPhoneRow.replace(/\s+/g, '')}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {ownerPhoneRow}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {typeof r.total_amount === 'undefined'
@@ -419,7 +526,10 @@ export default function LocationsPage() {
                       <button
                         type="button"
                         className="text-blue-600 hover:underline"
-                        onClick={(e) => { e.stopPropagation(); openDrawer(r); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openDrawer(r);
+                        }}
                       >
                         Voir
                       </button>
@@ -441,7 +551,9 @@ export default function LocationsPage() {
           />
           <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col">
             <div className="p-4 border-b flex items-center justify-between">
-              <h2 className="text-lg font-bold">Location #{selected.id}</h2>
+              <h2 className="text-lg font-bold">
+                Location #{selected.id}
+              </h2>
               <button
                 onClick={closeDrawer}
                 className="px-3 py-1 rounded bg-slate-100 hover:bg-slate-200"
@@ -465,7 +577,9 @@ export default function LocationsPage() {
                 )}
                 <div>
                   <div className="font-semibold">
-                    {v ? `${v.brand} ${v.model} (${v.registration_number})` : `Véhicule #${selected.vehicle}`}
+                    {v
+                      ? `${v.brand} ${v.model} (${v.registration_number})`
+                      : `Véhicule #${selected.vehicle}`}
                   </div>
                   <div className="text-sm text-slate-500">
                     {v?.city || '—'} • {v?.category || '—'}
@@ -479,11 +593,17 @@ export default function LocationsPage() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-slate-500">Début</div>
-                  <div className="font-medium">{new Date(selected.start_date).toLocaleString()}</div>
+                  <div className="font-medium">
+                    {new Date(
+                      selected.start_date
+                    ).toLocaleString()}
+                  </div>
                 </div>
                 <div>
                   <div className="text-slate-500">Fin</div>
-                  <div className="font-medium">{new Date(selected.end_date).toLocaleString()}</div>
+                  <div className="font-medium">
+                    {new Date(selected.end_date).toLocaleString()}
+                  </div>
                 </div>
                 <div>
                   <div className="text-slate-500">Montant</div>
@@ -495,21 +615,51 @@ export default function LocationsPage() {
                 </div>
                 <div>
                   <div className="text-slate-500">Méthode paiement</div>
-                  <div className="font-medium">{selected.payment_method || '—'}</div>
+                  <div className="font-medium">
+                    {formatPaymentMethod(selected)}
+                  </div>
                 </div>
                 <div>
                   <div className="text-slate-500">Code</div>
-                  <div className="font-medium">{selected.identification_code || '—'}</div>
+                  <div className="font-medium">
+                    {selected.identification_code || '—'}
+                  </div>
                 </div>
                 <div>
                   <div className="text-slate-500">Proprio</div>
                   <div className="font-medium">
                     {ownerName ? `${ownerName} — ` : ''}
                     {ownerPhone !== '—' ? (
-                      <a className="text-blue-600 hover:underline" href={`tel:${ownerPhone.replace(/\s+/g, '')}`}>
+                      <a
+                        className="text-blue-600 hover:underline"
+                        href={`tel:${ownerPhone.replace(/\s+/g, '')}`}
+                      >
                         {ownerPhone}
                       </a>
-                    ) : '—'}
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-500">Client</div>
+                  <div className="font-medium">
+                    {selected.renter_name
+                      ? `${selected.renter_name} — `
+                      : ''}
+                    {selected.renter_phone ? (
+                      <a
+                        className="text-blue-600 hover:underline"
+                        href={`tel:${selected.renter_phone.replace(
+                          /\s+/g,
+                          ''
+                        )}`}
+                      >
+                        {selected.renter_phone}
+                      </a>
+                    ) : (
+                      '—'
+                    )}
                   </div>
                 </div>
               </div>
@@ -527,40 +677,56 @@ export default function LocationsPage() {
                     disabled={!canConfirmCash || actionLoading !== null}
                     onClick={() => doAction('confirm_cash')}
                     className={`px-3 py-2 rounded text-white ${
-                      canConfirmCash && actionLoading === null ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-emerald-300 cursor-not-allowed'
+                      canConfirmCash && actionLoading === null
+                        ? 'bg-emerald-600 hover:bg-emerald-700'
+                        : 'bg-emerald-300 cursor-not-allowed'
                     }`}
                   >
-                    {actionLoading === 'confirm_cash' ? 'Confirmation…' : 'Confirmer cash'}
+                    {actionLoading === 'confirm_cash'
+                      ? 'Confirmation…'
+                      : 'Confirmer cash'}
                   </button>
 
                   <button
                     disabled={!canStart || actionLoading !== null}
                     onClick={() => doAction('start')}
                     className={`px-3 py-2 rounded text-white ${
-                      canStart && actionLoading === null ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-300 cursor-not-allowed'
+                      canStart && actionLoading === null
+                        ? 'bg-indigo-600 hover:bg-indigo-700'
+                        : 'bg-indigo-300 cursor-not-allowed'
                     }`}
                   >
-                    {actionLoading === 'start' ? 'Démarrage…' : 'Démarrer'}
+                    {actionLoading === 'start'
+                      ? 'Démarrage…'
+                      : 'Démarrer'}
                   </button>
 
                   <button
                     disabled={!canFinish || actionLoading !== null}
                     onClick={() => doAction('finish')}
                     className={`px-3 py-2 rounded text-white ${
-                      canFinish && actionLoading === null ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'
+                      canFinish && actionLoading === null
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'bg-blue-300 cursor-not-allowed'
                     }`}
                   >
-                    {actionLoading === 'finish' ? 'Clôture…' : 'Terminer'}
+                    {actionLoading === 'finish'
+                      ? 'Clôture…'
+                      : 'Terminer'}
                   </button>
 
                   <button
                     disabled={!canCancel || actionLoading !== null}
                     onClick={() => doAction('cancel')}
                     className={`px-3 py-2 rounded text-white ${
-                      canCancel && actionLoading === null ? 'bg-rose-600 hover:bg-rose-700' : 'bg-rose-300 cursor-not-allowed'
+                      canCancel && actionLoading === null
+                        ? 'bg-rose-600 hover:bg-rose-700'
+                        : 'bg-rose-300 cursor-not-allowed'
                     }`}
                   >
-                    {actionLoading === 'cancel' ? 'Annulation…' : 'Annuler'}
+                    {actionLoading === 'cancel'
+                      ? 'Annulation…'
+                      : 'Annuler'}
                   </button>
                 </div>
               </div>
