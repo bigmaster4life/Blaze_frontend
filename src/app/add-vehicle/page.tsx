@@ -18,6 +18,7 @@ type Vehicle = {
   image: string;
   city: string;
   category: 'SUV' | '4x4' | 'Berline' | 'Citadine';
+  owner_phone?: string;
 };
 
 type DRFError = {
@@ -48,9 +49,10 @@ const AddVehiclePage: React.FC = () => {
     fuel_type: 'essence' as Vehicle['fuel_type'],
     seats: 4,
     registration_number: '',
-    daily_price: '', // string au formulaire, converti à l’envoi
+    daily_price: '',
     city: '',
     category: '' as '' | Vehicle['category'],
+    owner_phone: '',          // 📌 AJOUT DU CHAMP
   });
 
   const [image, setImage] = useState<File | null>(null);
@@ -59,7 +61,6 @@ const AddVehiclePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Nettoyage de l’URL de preview pour éviter les leaks
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -75,7 +76,7 @@ const AddVehiclePage: React.FC = () => {
       [name]:
         name === 'seats'
           ? Number(value)
-          : (value as typeof prev[keyof typeof prev]),
+          : value,
     }));
   };
 
@@ -91,14 +92,14 @@ const AddVehiclePage: React.FC = () => {
     setSuccess(false);
 
     try {
-      // validations simples
       if (
         !form.brand ||
         !form.model ||
         !form.registration_number ||
         !form.daily_price ||
         !form.city ||
-        !form.category
+        !form.category ||
+        !form.owner_phone
       ) {
         alert('Merci de remplir tous les champs requis.');
         return;
@@ -120,9 +121,10 @@ const AddVehiclePage: React.FC = () => {
       formData.append('daily_price', String(priceNum));
       formData.append('city', form.city);
       formData.append('category', form.category);
+      formData.append('owner_phone', form.owner_phone);   // 📌 ENVOI DU NUMERO
+
       if (image) formData.append('image', image);
 
-      // ✅ pas de localStorage ici, l’intercepteur d’api.ts ajoute Authorization
       const { data } = await api.post<Vehicle>('vehicles/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -130,7 +132,6 @@ const AddVehiclePage: React.FC = () => {
       setVehicles((prev) => [...prev, data]);
       setSuccess(true);
 
-      // reset
       setForm({
         brand: '',
         model: '',
@@ -141,7 +142,9 @@ const AddVehiclePage: React.FC = () => {
         daily_price: '',
         city: '',
         category: '',
+        owner_phone: '',
       });
+
       setImage(null);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -151,8 +154,6 @@ const AddVehiclePage: React.FC = () => {
         const ax = err as AxiosError<unknown>;
         message = formatDRFError(ax.response?.data) || message;
         console.error('❌ AddVehicle payload:', ax.response?.data);
-      } else if (err instanceof Error) {
-        message = err.message;
       }
       alert(message);
     } finally {
@@ -173,100 +174,53 @@ const AddVehiclePage: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <input
-            type="text"
-            name="brand"
-            value={form.brand}
-            onChange={handleChange}
-            placeholder="Marque"
-            required
-            className="input"
-          />
-          <input
-            type="text"
-            name="model"
-            value={form.model}
-            onChange={handleChange}
-            placeholder="Modèle"
-            required
-            className="input"
-          />
-          <select
-            name="transmission"
-            value={form.transmission}
-            onChange={handleChange}
-            className="input"
-          >
+          <input type="text" name="brand" value={form.brand} onChange={handleChange} placeholder="Marque" required className="input" />
+          <input type="text" name="model" value={form.model} onChange={handleChange} placeholder="Modèle" required className="input" />
+
+          <select name="transmission" value={form.transmission} onChange={handleChange} className="input">
             <option value="manual">Manuelle</option>
             <option value="automatic">Automatique</option>
           </select>
-          <select
-            name="fuel_type"
-            value={form.fuel_type}
-            onChange={handleChange}
-            className="input"
-          >
+
+          <select name="fuel_type" value={form.fuel_type} onChange={handleChange} className="input">
             <option value="essence">Essence</option>
             <option value="diesel">Diesel</option>
             <option value="hybrid">Hybride</option>
             <option value="electric">Électrique</option>
           </select>
-          <input
-            type="number"
-            name="seats"
-            value={form.seats}
-            onChange={handleChange}
-            placeholder="Nombre de sièges"
-            className="input"
-            min={1}
-          />
-          <input
-            type="text"
-            name="registration_number"
-            value={form.registration_number}
-            onChange={handleChange}
-            placeholder="Immatriculation"
-            required
-            className="input"
-          />
-          <input
-            type="number"
-            name="daily_price"
-            value={form.daily_price}
-            onChange={handleChange}
-            placeholder="Prix / jour"
-            required
-            className="input"
-            min={0}
-            step="0.01"
-          />
-          <input
-            type="text"
-            name="city"
-            value={form.city}
-            onChange={handleChange}
-            placeholder="Ville"
-            required
-            className="input"
-          />
-          <select
-            name="category"
-            value={form.category}
-            onChange={handleChange}
-            required
-            className="input"
-          >
+
+          <input type="number" name="seats" value={form.seats} onChange={handleChange} placeholder="Nombre de sièges" min={1} className="input" />
+
+          <input type="text" name="registration_number" value={form.registration_number} onChange={handleChange} placeholder="Immatriculation" required className="input" />
+
+          <input type="number" name="daily_price" value={form.daily_price} onChange={handleChange} placeholder="Prix / jour" min={0} step="0.01" required className="input" />
+
+          <input type="text" name="city" value={form.city} onChange={handleChange} placeholder="Ville" required className="input" />
+
+          <select name="category" value={form.category} onChange={handleChange} required className="input">
             <option value="">Catégorie</option>
             <option value="SUV">SUV</option>
             <option value="4x4">4x4</option>
             <option value="Berline">Berline</option>
             <option value="Citadine">Citadine</option>
           </select>
+
+          {/* 📌 AJOUT DU CHAMP PROPRIÉTAIRE */}
+          <input
+            type="text"
+            name="owner_phone"
+            value={form.owner_phone}
+            onChange={handleChange}
+            placeholder="Numéro du propriétaire"
+            required
+            className="input"
+          />
         </div>
 
         <div>
           <label className="block font-medium">Image du véhicule</label>
           <input type="file" accept="image/*" onChange={handleImageChange} className="mt-2" />
+
           {previewUrl && (
             <Image
               src={previewUrl}
@@ -278,19 +232,11 @@ const AddVehiclePage: React.FC = () => {
           )}
         </div>
 
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-          disabled={loading}
-        >
+        <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50" disabled={loading}>
           {loading ? 'Envoi...' : 'Ajouter le véhicule'}
         </button>
 
-        {success && (
-          <p className="text-green-600 font-medium mt-4">
-            ✅ Véhicule ajouté avec succès !
-          </p>
-        )}
+        {success && <p className="text-green-600 font-medium mt-4">✅ Véhicule ajouté avec succès !</p>}
       </form>
 
       {vehicles.length > 0 && (
