@@ -6,8 +6,7 @@ import api from '@/utils/api';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 
-// ✅ Rôles autorisés (déclaré en dehors du composant pour éviter le warning React)
-const ALLOWED_ROLES = ['manager_staff'];
+const ALLOWED_ROLES = ['manager_staff', 'employee_staff', 'loueur'];
 
 interface User {
   id: number;
@@ -18,27 +17,51 @@ interface User {
   created_at?: string;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const { user } = useAuth();
   const router = useRouter();
 
+  // ----------------- VALIDATION DES ROLES -----------------
   useEffect(() => {
     if (!user) return;
-    const role = user?.user_type ?? '';
 
-    const ALLOWED_ROLES: string[] = ['manager_staff', 'employee_staff', 'loueur'];
-    if (!role || !ALLOWED_ROLES.includes(role)) {
+    const role = user.user_type ?? '';
+
+    if (!ALLOWED_ROLES.includes(role)) {
       router.push('/');
     }
   }, [user, router]);
 
+  // ----------------- CHARGEMENT API -----------------
   const fetchUsers = async () => {
     try {
       const response = await api.get('/users/');
-      setUsers(response.data);
+
+      // Format paginé ou liste simple
+      const data = response.data;
+
+      let finalUsers: User[] = [];
+
+      if (Array.isArray(data)) {
+        finalUsers = data;
+      } else if (typeof data === 'object' && Array.isArray((data as PaginatedResponse<User>).results)) {
+        finalUsers = (data as PaginatedResponse<User>).results;
+      } else {
+        throw new Error('Format API inattendu');
+      }
+
+      setUsers(finalUsers);
     } catch {
       setError('Erreur lors du chargement des utilisateurs');
     } finally {
@@ -52,6 +75,7 @@ export default function UsersPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // ----------------- RENDER -----------------
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <Link
@@ -81,14 +105,16 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-t">
-                  <td className="p-2">{user.first_name} {user.last_name}</td>
-                  <td className="p-2">{user.email}</td>
-                  <td className="p-2 capitalize">{user.user_type}</td>
+              {users.map((u) => (
+                <tr key={u.id} className="border-t">
                   <td className="p-2">
-                    {user.created_at
-                      ? new Date(user.created_at).toLocaleDateString()
+                    {u.first_name} {u.last_name}
+                  </td>
+                  <td className="p-2">{u.email}</td>
+                  <td className="p-2 capitalize">{u.user_type}</td>
+                  <td className="p-2">
+                    {u.created_at
+                      ? new Date(u.created_at).toLocaleDateString()
                       : 'Non spécifiée'}
                   </td>
                 </tr>
