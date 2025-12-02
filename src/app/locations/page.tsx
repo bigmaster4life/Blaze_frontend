@@ -42,7 +42,7 @@ type Vehicle = {
   image?: string | null;
   daily_price?: string | number;
   owner_phone?: string | null; // exposé par le serializer
-  owner_name?: string | null; // ⬅️ si dispo côté backend, on l’affiche
+  owner_name?: string | null;  // ⬅️ si dispo côté backend, on l’affiche
 };
 
 type DRFPaginated<T> = {
@@ -172,9 +172,9 @@ function StatusPill({ status }: { status: RentalStatus }) {
 function formatPaymentMethod(r: Rental): string {
   if (!r.payment_method) return '—';
 
-  // Cash ne doit pas apparaître tant que ce n'est pas confirmé
-  if (r.payment_method === 'cash' && r.status === 'pending') {
-    return '—';
+  if (r.payment_method === 'cash') {
+    if (r.status === 'pending') return 'Cash (à confirmer)';
+    return 'Cash';
   }
 
   if (r.payment_method === 'mobile') {
@@ -186,7 +186,6 @@ function formatPaymentMethod(r: Rental): string {
   }
 
   if (r.payment_method === 'wallet') return 'Wallet';
-  if (r.payment_method === 'cash') return 'Cash';
 
   return r.payment_method;
 }
@@ -358,7 +357,10 @@ export default function LocationsPage() {
 
   // Règles d’affichage des actions (cohérentes avec le backend)
   const canConfirmCash =
-    selected?.status === 'pending' || selected?.status === 'confirmed';
+    !!selected &&
+    selected.payment_method === 'cash' &&
+    (selected.status === 'pending' || selected.status === 'confirmed');
+
   const canStart =
     selected?.status === 'confirmed' || selected?.status === 'in_progress';
   const canFinish =
@@ -366,6 +368,20 @@ export default function LocationsPage() {
   const canCancel = selected
     ? !['finished', 'canceled', 'expired'].includes(selected.status)
     : false;
+
+  // 🔔 compteur de locations cash en attente
+  const pendingCashCount = useMemo(
+    () =>
+      rows.filter(
+        (r) => r.payment_method === 'cash' && r.status === 'pending'
+      ).length,
+    [rows]
+  );
+
+  const isSelectedPendingCash =
+    !!selected &&
+    selected.payment_method === 'cash' &&
+    selected.status === 'pending';
 
   return (
     <div className="space-y-6">
@@ -378,6 +394,24 @@ export default function LocationsPage() {
           ← Retour au Dashboard
         </Link>
       </div>
+
+      {/* 🔔 Notification admin : locations cash à confirmer */}
+      {pendingCashCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-4 py-3 text-sm flex items-center gap-3">
+          <span className="text-lg">⚠️</span>
+          <div>
+            <div className="font-semibold">
+              {pendingCashCount} location
+              {pendingCashCount > 1 ? 's' : ''} cash en attente de confirmation.
+            </div>
+            <div className="text-xs text-amber-800">
+              Ouvrez le détail d’une location puis cliquez sur{' '}
+              <span className="font-semibold">“Confirmer cash”</span> après avoir
+              reçu le paiement.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filtres */}
       <div className="flex flex-wrap items-end gap-3 bg-white rounded-xl p-4 shadow">
@@ -467,10 +501,15 @@ export default function LocationsPage() {
                 const renterPhoneRow = r.customer_phone || '—';
                 const renterNameRow = r.customer_name || '';
 
+                const isRowPendingCash =
+                  r.payment_method === 'cash' && r.status === 'pending';
+
                 return (
                   <tr
                     key={r.id}
-                    className="border-t hover:bg-slate-50 cursor-pointer"
+                    className={`border-t hover:bg-slate-50 cursor-pointer ${
+                      isRowPendingCash ? 'bg-amber-50/40' : ''
+                    }`}
                     onClick={() => openDrawer(r)}
                   >
                     <td className="px-3 py-2 font-mono">#{r.id}</td>
@@ -589,6 +628,14 @@ export default function LocationsPage() {
                   <StatusPill status={selected.status} />
                 </div>
               </div>
+
+              {isSelectedPendingCash && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded px-3 py-2 text-xs">
+                  Paiement <span className="font-semibold">cash</span> choisi
+                  par le client. Merci de confirmer uniquement après réception
+                  effective des fonds.
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
