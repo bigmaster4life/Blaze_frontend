@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import api from '@/utils/api';
 
 type DriverCategory = 'eco' | 'clim' | 'vip' | string;
@@ -30,42 +31,60 @@ export default function DriverDetailPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [actionErr, setActionErr] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
+
+  const fetchDriver = useCallback(async () => {
     if (!id) return;
 
-    const fetchDriver = async () => {
-      try {
-        const res = await api.get<DriverDetail>(`/drivers/${id}/`);
-        setDriver(res.data);
-        setErr(null);
-      } catch {
-        setErr('Impossible de charger les détails du chauffeur.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDriver();
+    try {
+      const res = await api.get<DriverDetail>(`/drivers/${id}/`);
+      setDriver(res.data);
+      setErr(null);
+    } catch {
+      setErr('Impossible de charger les détails du chauffeur.');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    fetchDriver();
+  }, [fetchDriver]);
+
+  const validateDriver = async () => {
+    if (!id) return;
+
+    setActionLoading(true);
+    setActionMsg(null);
+    setActionErr(null);
+
+    try {
+      await api.patch(`/drivers/${id}/`, {
+        onboarding_completed: true,
+        must_reset_password: false,
+      });
+
+      setActionMsg('Chauffeur validé avec succès.');
+      fetchDriver();
+    } catch {
+      setActionErr("Impossible de valider le chauffeur.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   if (loading) {
     return <p className="px-4 py-8">Chargement...</p>;
   }
 
   if (err) {
-    return (
-      <p className="px-4 py-8 text-red-600">
-        {err}
-      </p>
-    );
+    return <p className="px-4 py-8 text-red-600">{err}</p>;
   }
 
   if (!driver) {
-    return (
-      <p className="px-4 py-8">
-        Aucun chauffeur trouvé.
-      </p>
-    );
+    return <p className="px-4 py-8">Aucun chauffeur trouvé.</p>;
   }
 
   const {
@@ -85,6 +104,27 @@ export default function DriverDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      {/* Navigation */}
+      <div className="flex items-center justify-between mb-4">
+        <Link
+          href="/drivers"
+          className="bg-gray-200 text-gray-900 px-4 py-2 rounded hover:bg-gray-300 transition"
+        >
+          ← Retour à la liste des chauffeurs
+        </Link>
+
+        <button
+          onClick={validateDriver}
+          disabled={actionLoading}
+          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+        >
+          {actionLoading ? 'Validation...' : 'Valider manuellement'}
+        </button>
+      </div>
+
+      {actionMsg && <p className="text-green-600">{actionMsg}</p>}
+      {actionErr && <p className="text-red-600">{actionErr}</p>}
+
       <header>
         <h1 className="text-2xl font-bold mb-2">
           {full_name} — Détails du chauffeur
@@ -96,24 +136,29 @@ export default function DriverDetailPage() {
         )}
       </header>
 
-      {/* Bloc identité */}
+      {/* Identité */}
       <section className="bg-white rounded-xl shadow p-4 space-y-2">
         <h2 className="text-lg font-semibold mb-2">Identité</h2>
-        <p><span className="font-medium">Email :</span> {email}</p>
-        <p><span className="font-medium">Téléphone :</span> {phone}</p>
-        <p><span className="font-medium">Catégorie :</span> {category || '—'}</p>
-      </section>
-
-      {/* Bloc véhicule */}
-      <section className="bg-white rounded-xl shadow p-4 space-y-2">
-        <h2 className="text-lg font-semibold mb-2">Véhicule</h2>
         <p>
-          <span className="font-medium">Plaque :</span>{' '}
-          {vehicle_plate || '—'}
+          <span className="font-medium">Email :</span> {email}
+        </p>
+        <p>
+          <span className="font-medium">Téléphone :</span> {phone}
+        </p>
+        <p>
+          <span className="font-medium">Catégorie :</span> {category || '—'}
         </p>
       </section>
 
-      {/* Bloc statut & onboarding */}
+      {/* Véhicule */}
+      <section className="bg-white rounded-xl shadow p-4 space-y-2">
+        <h2 className="text-lg font-semibold mb-2">Véhicule</h2>
+        <p>
+          <span className="font-medium">Plaque :</span> {vehicle_plate || '—'}
+        </p>
+      </section>
+
+      {/* Statut & Onboarding */}
       <section className="bg-white rounded-xl shadow p-4 space-y-2">
         <h2 className="text-lg font-semibold mb-2">Statut & Onboarding</h2>
         <p>
@@ -139,7 +184,7 @@ export default function DriverDetailPage() {
         )}
       </section>
 
-      {/* Bloc documents */}
+      {/* Documents */}
       <section className="bg-white rounded-xl shadow p-4">
         <h2 className="text-lg font-semibold mb-3">Documents</h2>
         <ul className="space-y-1 text-sm">

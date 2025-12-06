@@ -1,6 +1,18 @@
+'use client';
+
+import Link from 'next/link';
+
 export default function IkassaHome() {
   return (
     <div className="p-6">
+
+      {/* BOUTON RETOUR */}
+      <Link
+        href="/dashboard"
+        className="mb-6 inline-block bg-gray-200 text-gray-900 px-4 py-2 rounded hover:bg-gray-300 transition"
+      >
+        ← Retour à Blaze
+      </Link>
 
       {/* HEADER */}
       <div className="flex items-center gap-4 mb-6">
