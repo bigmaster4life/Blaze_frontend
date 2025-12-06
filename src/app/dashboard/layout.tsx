@@ -33,6 +33,11 @@ export default function RootLayout({
           <Link href="/locations" className="hover:text-blue-600">📍 Locations</Link>
           <Link href="/users" className="hover:text-blue-600">👤 Utilisateurs</Link>
           <Link href="/analytics" className="hover:text-blue-600">📊 Analytics</Link>
+
+          {/* ---- IKASSA SECTION ADDED HERE ---- */}
+          <Link href="/ikassa" className="hover:text-blue-600">🛒 IKASSA (B2B)</Link>
+          {/* ------------------------------------ */}
+          
           <Link href="/settings" className="hover:text-blue-600">⚙️ Paramètres</Link>
         </nav>
       </aside>
