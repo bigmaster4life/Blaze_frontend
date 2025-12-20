@@ -1,7 +1,7 @@
 // app/api/proxy/drivers/invite/route.ts
 import { NextResponse } from 'next/server';
 
-const UPSTREAM = 'https://api-preprod.blazepro.org/api/drivers/invite/';
+const UPSTREAM = 'https://be.blazepro.org/api/drivers/invite/';
 
 // Important pour Vercel : ne pas mettre en cache
 export const dynamic = 'force-dynamic';
