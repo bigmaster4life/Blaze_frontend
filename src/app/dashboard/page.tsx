@@ -36,6 +36,14 @@ export default function DashboardPage() {
         </Link>
 
         <Link
+          href="/delivery-drivers"
+          className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
+        >
+          <h2 className="text-xl font-semibold mb-2">🛵 Livreurs</h2>
+          <p>Gérez les livreurs, leurs statuts et leurs disponibilités.</p>
+        </Link>
+
+        <Link
           href="/users"
           className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
         >

@@ -30,6 +30,7 @@ export default function RootLayout({
           <Link href="/" className="hover:text-blue-600">🏠 Accueil</Link>
           <Link href="/add-vehicle" className="hover:text-blue-600">🚘 Ajouter un véhicule</Link>
           <Link href="/drivers" className="hover:text-blue-600">🧑‍✈️ Chauffeurs</Link>
+          <Link href="/delivery-drivers" className="hover:text-blue-600">🛵 Livreurs</Link>
           <Link href="/locations" className="hover:text-blue-600">📍 Locations</Link>
           <Link href="/users" className="hover:text-blue-600">👤 Utilisateurs</Link>
           <Link href="/analytics" className="hover:text-blue-600">📊 Analytics</Link>
