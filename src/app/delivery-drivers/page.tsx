@@ -63,6 +63,7 @@ export default function DeliveryDriversPage() {
 
   const [resendLoadingMap, setResendLoadingMap] = useState<Record<number, boolean>>({});
   const [blockLoadingMap, setBlockLoadingMap] = useState<Record<number, boolean>>({});
+  const [validateLoadingMap, setValidateLoadingMap] = useState<Record<number, boolean>>({});
 
   const fetchDrivers = async () => {
     try {
@@ -117,7 +118,8 @@ export default function DeliveryDriversPage() {
         vehicle_type: formData.vehicle_type,
       };
 
-      await api.post('/delivery/admin/drivers/create/', payload);
+      // ✅ Backend réel: /delivery/drivers/create/
+      await api.post('/delivery/drivers/create/', payload);
 
       setFormSuccess('Livreur créé. Invitation envoyée.');
       setFormData({
@@ -146,7 +148,8 @@ export default function DeliveryDriversPage() {
     setResendLoadingMap((m) => ({ ...m, [driverId]: true }));
     try {
       const { data } = await api.post<ApiErrorDetail>(
-        `/delivery/admin/drivers/${driverId}/resend-invite/`
+        // ✅ Backend réel: /resend_invite/
+        `/delivery/admin/drivers/${driverId}/resend_invite/`
       );
       setFormSuccess(data?.detail || 'Invitation renvoyée.');
     } catch (err: unknown) {
@@ -181,10 +184,14 @@ export default function DeliveryDriversPage() {
     setBlockLoadingMap((m) => ({ ...m, [driver.id]: true }));
 
     try {
-      await api.post(`/delivery/admin/drivers/${driver.id}/block/`, {
-        is_blocked: !currentlyBlocked,
-        block_reason: currentlyBlocked ? '' : reason,
-      });
+      await api.post(
+        // ✅ Backend réel: /toggle_block/
+        `/delivery/admin/drivers/${driver.id}/toggle_block/`,
+        {
+          is_blocked: !currentlyBlocked,
+          block_reason: currentlyBlocked ? '' : reason,
+        }
+      );
 
       setDrivers((prev) =>
         prev.map((d) =>
@@ -211,6 +218,46 @@ export default function DeliveryDriversPage() {
       setBlockLoadingMap((m) => {
         const rest = { ...m };
         delete rest[driver.id];
+        return rest;
+      });
+    }
+  };
+
+  const validateDriver = async (driverId: number) => {
+    setFormSuccess(null);
+    setFormError(null);
+
+    setValidateLoadingMap((m) => ({ ...m, [driverId]: true }));
+    try {
+      await api.post(
+        // ✅ Backend réel: /validate_driver/
+        `/delivery/admin/drivers/${driverId}/validate_driver/`
+      );
+
+      setDrivers((prev) =>
+        prev.map((d) =>
+          d.id === driverId
+            ? {
+                ...d,
+                is_verified: true,
+                is_active: true,
+              }
+            : d
+        )
+      );
+
+      setFormSuccess('Livreur validé.');
+    } catch (err: unknown) {
+      let detail = 'Erreur lors de la validation du livreur';
+      if (isAxiosError(err)) {
+        const d = err.response?.data as ApiErrorDetail;
+        detail = d?.detail || detail;
+      }
+      setFormError(detail);
+    } finally {
+      setValidateLoadingMap((m) => {
+        const rest = { ...m };
+        delete rest[driverId];
         return rest;
       });
     }
@@ -252,12 +299,40 @@ export default function DeliveryDriversPage() {
       <h1 className="text-3xl font-bold mb-4">Enrôlement des livreurs</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4 mb-10 max-w-2xl">
-        <input type="text" name="full_name" placeholder="Nom complet" value={formData.full_name} onChange={handleChange} required className="border px-4 py-2 rounded w-full" />
-        <input type="email" name="email" placeholder="Email (optionnel)" value={formData.email} onChange={handleChange} className="border px-4 py-2 rounded w-full" />
-        <input type="text" name="phone" placeholder="Téléphone" value={formData.phone} onChange={handleChange} required className="border px-4 py-2 rounded w-full" />
+        <input
+          type="text"
+          name="full_name"
+          placeholder="Nom complet"
+          value={formData.full_name}
+          onChange={handleChange}
+          required
+          className="border px-4 py-2 rounded w-full"
+        />
+        <input
+          type="email"
+          name="email"
+          placeholder="Email (optionnel)"
+          value={formData.email}
+          onChange={handleChange}
+          className="border px-4 py-2 rounded w-full"
+        />
+        <input
+          type="text"
+          name="phone"
+          placeholder="Téléphone"
+          value={formData.phone}
+          onChange={handleChange}
+          required
+          className="border px-4 py-2 rounded w-full"
+        />
 
         <div className="grid grid-cols-2 gap-4">
-          <select name="city" value={formData.city} onChange={handleChange} className="border px-4 py-2 rounded w-full bg-white">
+          <select
+            name="city"
+            value={formData.city}
+            onChange={handleChange}
+            className="border px-4 py-2 rounded w-full bg-white"
+          >
             <option value="libreville">Libreville</option>
             <option value="owendo">Owendo</option>
             <option value="angondje">Angondjé</option>
@@ -265,14 +340,22 @@ export default function DeliveryDriversPage() {
             <option value="franceville">Franceville</option>
           </select>
 
-          <select name="vehicle_type" value={formData.vehicle_type} onChange={handleChange} className="border px-4 py-2 rounded w-full bg-white">
+          <select
+            name="vehicle_type"
+            value={formData.vehicle_type}
+            onChange={handleChange}
+            className="border px-4 py-2 rounded w-full bg-white"
+          >
             <option value="moto">Moto</option>
             <option value="car">Voiture</option>
             <option value="van">Van</option>
           </select>
         </div>
 
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+        <button
+          type="submit"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+        >
           Créer le livreur
         </button>
 
@@ -307,6 +390,7 @@ export default function DeliveryDriversPage() {
                 const isBlocked = !!d.is_blocked;
                 const isResending = !!resendLoadingMap[d.id];
                 const isBlocking = !!blockLoadingMap[d.id];
+                const isValidating = !!validateLoadingMap[d.id];
 
                 return (
                   <tr key={d.id} className="border-t">
@@ -320,14 +404,25 @@ export default function DeliveryDriversPage() {
                     </td>
                     <td className="p-2">
                       {isBlocked ? 'Bloqué' : d.is_active ? 'Actif' : 'Inactif'}
+                      {d.is_verified ? ' (Vérifié)' : ''}
                     </td>
+
                     <td className="p-2 flex gap-2">
-                      <Link href={`/delivery-drivers/${d.id}`} className="text-blue-600 hover:underline">Voir</Link>
+                      <Link
+                        href={`/delivery-drivers/${d.id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Voir
+                      </Link>
 
                       <button
                         onClick={() => resendInvite(d.id)}
                         disabled={isResending}
-                        className={`px-3 py-1 rounded text-white ${isResending ? 'bg-indigo-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                        className={`px-3 py-1 rounded text-white ${
+                          isResending
+                            ? 'bg-indigo-300 cursor-not-allowed'
+                            : 'bg-indigo-600 hover:bg-indigo-700'
+                        }`}
                       >
                         {isResending ? 'Envoi…' : 'Renvoyer'}
                       </button>
@@ -335,9 +430,26 @@ export default function DeliveryDriversPage() {
                       <button
                         onClick={() => toggleBlock(d)}
                         disabled={isBlocking}
-                        className={`px-3 py-1 rounded text-white ${isBlocked ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} ${isBlocking ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        className={`px-3 py-1 rounded text-white ${
+                          isBlocked
+                            ? 'bg-green-600 hover:bg-green-700'
+                            : 'bg-red-600 hover:bg-red-700'
+                        } ${isBlocking ? 'opacity-60 cursor-not-allowed' : ''}`}
                       >
                         {isBlocking ? '...' : isBlocked ? 'Débloquer' : 'Bloquer'}
+                      </button>
+
+                      <button
+                        onClick={() => validateDriver(d.id)}
+                        disabled={isValidating || !!d.is_verified}
+                        className={`px-3 py-1 rounded text-white ${
+                          d.is_verified
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-700'
+                        } ${isValidating ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        title={d.is_verified ? 'Déjà validé' : 'Valider le livreur'}
+                      >
+                        {isValidating ? '...' : d.is_verified ? 'Validé' : 'Valider'}
                       </button>
                     </td>
                   </tr>
