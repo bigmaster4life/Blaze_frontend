@@ -28,6 +28,7 @@ export default function RootLayout({
         <h1 className="text-2xl font-bold mb-6 text-blue-600">🚗 Blaze Admin</h1>
         <nav className="flex flex-col space-y-3">
           <Link href="/" className="hover:text-blue-600">🏠 Accueil</Link>
+          <Link href="/operator" className="hover:text-blue-600">🎛️ Operator Center</Link>
           <Link href="/add-vehicle" className="hover:text-blue-600">🚘 Ajouter un véhicule</Link>
           <Link href="/drivers" className="hover:text-blue-600">🧑‍✈️ Chauffeurs</Link>
           <Link href="/delivery-drivers" className="hover:text-blue-600">🛵 Livreurs</Link>

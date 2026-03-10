@@ -20,6 +20,14 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link
+          href="/operator"
+          className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
+        >
+          <h2 className="text-xl font-semibold mb-2">🎛️ Operator Center</h2>
+          <p>Supervisez les demandes VTC, Delivery et Location en temps réel.</p>
+        </Link>
+        
+        <Link
           href="/add-vehicle"
           className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
         >
