@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import api from '@/utils/api';
+import Link from 'next/link';
 
 type TabKey = 'overview' | 'vtc' | 'delivery' | 'rental';
 
@@ -88,6 +89,15 @@ export default function OperatorPage() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+        >
+            ← Retour au dashboard
+        </Link>
+      </div>  
+      
       <div className="rounded-2xl bg-white shadow-sm border p-6">
         <h1 className="text-3xl font-bold text-gray-900">Operator Center</h1>
         <p className="text-gray-600 mt-2">
