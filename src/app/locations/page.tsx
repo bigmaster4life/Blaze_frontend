@@ -3,7 +3,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { getAccessToken } from '@/utils/api';
+import api, { apiErrorMessage } from '@/utils/api';
 import Image from 'next/image';
 
 type RentalStatus =
@@ -42,7 +42,7 @@ type Vehicle = {
   image?: string | null;
   daily_price?: string | number;
   owner_phone?: string | null; // exposé par le serializer
-  owner_name?: string | null;  // ⬅️ si dispo côté backend, on l’affiche
+  owner_name?: string | null; // ⬅️ si dispo côté backend, on l’affiche
 };
 
 type DRFPaginated<T> = {
@@ -56,90 +56,24 @@ function isPaginated<T>(p: DRFPaginated<T> | T[]): p is DRFPaginated<T> {
   return typeof (p as DRFPaginated<T>).results !== 'undefined';
 }
 
-function hasDetail(obj: unknown): obj is { detail?: unknown } {
-  return typeof obj === 'object' && obj !== null && 'detail' in obj;
-}
-
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api')
-  .replace(/\/+$/, ''); // .../api
-
-// --- util fetch JSON avec Bearer ---
 async function getJSON<T>(
   path: string,
   params?: Record<string, string | number | undefined>
 ): Promise<T> {
-  const access = getAccessToken();
-  if (!access) throw new Error('NO_TOKEN');
-  const qs = params
-    ? `?${new URLSearchParams(
-        Object.entries(params).reduce<Record<string, string>>(
-          (acc, [k, v]) => {
-            if (v !== undefined && v !== null) acc[k] = String(v);
-            return acc;
-          },
-          {}
-        )
-      ).toString()}`
-    : '';
-  const res = await fetch(`${API_BASE}${path}${qs}`, {
-    headers: { Accept: 'application/json', Authorization: `Bearer ${access}` },
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    let reason = `HTTP_${res.status}`;
-    try {
-      const j: unknown = await res.json();
-      if (
-        hasDetail(j) &&
-        typeof j.detail === 'string' &&
-        j.detail.trim()
-      ) {
-        reason = j.detail;
-      }
-    } catch {
-      /* ignore */
-    }
-    throw new Error(reason);
+  try {
+    return (await api.get<T>(path, { params })).data;
+  } catch (error) {
+    throw new Error(apiErrorMessage(error));
   }
-  return (await res.json()) as T;
 }
-
 async function postJSON<T>(
   path: string,
   body?: Record<string, unknown> | null
 ): Promise<T> {
-  const access = getAccessToken();
-  if (!access) throw new Error('NO_TOKEN');
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${access}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    let reason = `HTTP_${res.status}`;
-    try {
-      const j: unknown = await res.json();
-      if (
-        hasDetail(j) &&
-        typeof j.detail === 'string' &&
-        j.detail.trim()
-      ) {
-        reason = j.detail;
-      }
-    } catch {
-      /* ignore */
-    }
-    throw new Error(reason);
-  }
-  // certains endpoints peuvent renvoyer 204 (vide)
   try {
-    return (await res.json()) as T;
-  } catch {
-    return {} as T;
+    return (await api.post<T>(path, body)).data;
+  } catch (error) {
+    throw new Error(apiErrorMessage(error));
   }
 }
 
@@ -212,8 +146,9 @@ export default function LocationsPage() {
   // Drawer state
   const [selected, setSelected] = useState<Rental | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [actionLoading, setActionLoading] =
-    useState<'confirm_cash' | 'start' | 'finish' | 'cancel' | null>(null);
+  const [actionLoading, setActionLoading] = useState<
+    'confirm_cash' | 'start' | 'finish' | 'cancel' | null
+  >(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const params = useMemo(
@@ -372,9 +307,8 @@ export default function LocationsPage() {
   // 🔔 compteur de locations cash en attente
   const pendingCashCount = useMemo(
     () =>
-      rows.filter(
-        (r) => r.payment_method === 'cash' && r.status === 'pending'
-      ).length,
+      rows.filter((r) => r.payment_method === 'cash' && r.status === 'pending')
+        .length,
     [rows]
   );
 
@@ -406,8 +340,8 @@ export default function LocationsPage() {
             </div>
             <div className="text-xs text-amber-800">
               Ouvrez le détail d’une location puis cliquez sur{' '}
-              <span className="font-semibold">“Confirmer cash”</span> après avoir
-              reçu le paiement.
+              <span className="font-semibold">“Confirmer cash”</span> après
+              avoir reçu le paiement.
             </div>
           </div>
         </div>
@@ -430,9 +364,7 @@ export default function LocationsPage() {
             type="date"
             className="border rounded px-3 py-2"
             value={range.from}
-            onChange={(e) =>
-              setRange((r) => ({ ...r, from: e.target.value }))
-            }
+            onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
           />
         </div>
         <div>
@@ -441,9 +373,7 @@ export default function LocationsPage() {
             type="date"
             className="border rounded px-3 py-2"
             value={range.to}
-            onChange={(e) =>
-              setRange((r) => ({ ...r, to: e.target.value }))
-            }
+            onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
           />
         </div>
         <button
@@ -481,10 +411,7 @@ export default function LocationsPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td
-                  className="px-3 py-6 text-center text-gray-500"
-                  colSpan={9}
-                >
+                <td className="px-3 py-6 text-center text-gray-500" colSpan={9}>
                   Aucune location sur la période.
                 </td>
               </tr>
@@ -590,9 +517,7 @@ export default function LocationsPage() {
           />
           <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col">
             <div className="p-4 border-b flex items-center justify-between">
-              <h2 className="text-lg font-bold">
-                Location #{selected.id}
-              </h2>
+              <h2 className="text-lg font-bold">Location #{selected.id}</h2>
               <button
                 onClick={closeDrawer}
                 className="px-3 py-1 rounded bg-slate-100 hover:bg-slate-200"
@@ -641,9 +566,7 @@ export default function LocationsPage() {
                 <div>
                   <div className="text-slate-500">Début</div>
                   <div className="font-medium">
-                    {new Date(
-                      selected.start_date
-                    ).toLocaleString()}
+                    {new Date(selected.start_date).toLocaleString()}
                   </div>
                 </div>
                 <div>
@@ -743,9 +666,7 @@ export default function LocationsPage() {
                         : 'bg-indigo-300 cursor-not-allowed'
                     }`}
                   >
-                    {actionLoading === 'start'
-                      ? 'Démarrage…'
-                      : 'Démarrer'}
+                    {actionLoading === 'start' ? 'Démarrage…' : 'Démarrer'}
                   </button>
 
                   <button
@@ -757,9 +678,7 @@ export default function LocationsPage() {
                         : 'bg-blue-300 cursor-not-allowed'
                     }`}
                   >
-                    {actionLoading === 'finish'
-                      ? 'Clôture…'
-                      : 'Terminer'}
+                    {actionLoading === 'finish' ? 'Clôture…' : 'Terminer'}
                   </button>
 
                   <button
@@ -771,9 +690,7 @@ export default function LocationsPage() {
                         : 'bg-rose-300 cursor-not-allowed'
                     }`}
                   >
-                    {actionLoading === 'cancel'
-                      ? 'Annulation…'
-                      : 'Annuler'}
+                    {actionLoading === 'cancel' ? 'Annulation…' : 'Annuler'}
                   </button>
                 </div>
               </div>

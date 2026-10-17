@@ -1,7 +1,9 @@
 // app/api/proxy/drivers/invite/route.ts
 import { NextResponse } from 'next/server';
 
-const UPSTREAM = 'https://be.blazepro.org/api/drivers/invite/';
+const UPSTREAM = `${(
+  process.env.NEXT_PUBLIC_API_BASE || 'https://be.blazepro.org/api'
+).replace(/\/+$/, '')}/drivers/invite/`;
 
 // Important pour Vercel : ne pas mettre en cache
 export const dynamic = 'force-dynamic';
@@ -16,13 +18,15 @@ export async function POST(req: Request) {
     // On proxy vers l'API préprod (server->server)
     const upstreamRes = await fetch(UPSTREAM, {
       method: 'POST',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(20000),
       headers: {
-        'Authorization': auth,
+        Authorization: auth,
         'Content-Type': 'application/json',
-        'Accept': accept,
+        Accept: accept,
         // Ces deux headers aident si ton back whiteliste l'origine
-        'Origin': 'https://blaze-frontend-indol.vercel.app',
-        'Referer': 'https://blaze-frontend-indol.vercel.app/',
+        Origin: 'https://blaze-frontend-indol.vercel.app',
+        Referer: 'https://blaze-frontend-indol.vercel.app/',
       },
       body,
     });
@@ -37,7 +41,15 @@ export async function POST(req: Request) {
       },
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ detail: 'Proxy error', error: msg }, { status: 502 });
+    const timeout =
+      e instanceof Error && ['TimeoutError', 'AbortError'].includes(e.name);
+    return NextResponse.json(
+      {
+        detail: timeout
+          ? 'Le serveur met trop de temps à répondre.'
+          : 'Le serveur est momentanément indisponible.',
+      },
+      { status: timeout ? 504 : 502 }
+    );
   }
 }

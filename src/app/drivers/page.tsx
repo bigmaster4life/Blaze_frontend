@@ -1,6 +1,7 @@
 'use client';
+import { usePollingTask } from '@/hooks/usePollingTask';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { isAxiosError } from 'axios';
 import api from '@/utils/api';
@@ -43,9 +44,13 @@ export default function DriversPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   // chargement par chauffeur pour renvoi d’invitation
-  const [resendLoadingMap, setResendLoadingMap] = useState<Record<number, boolean>>({});
+  const [resendLoadingMap, setResendLoadingMap] = useState<
+    Record<number, boolean>
+  >({});
   // chargement par chauffeur pour blocage/déblocage
-  const [blockLoadingMap, setBlockLoadingMap] = useState<Record<number, boolean>>({});
+  const [blockLoadingMap, setBlockLoadingMap] = useState<
+    Record<number, boolean>
+  >({});
 
   const isManager = user?.user_type === 'manager_staff';
   const isEmployee = user?.user_type === 'employee_staff';
@@ -70,13 +75,7 @@ export default function DriversPage() {
     }
   };
 
-  useEffect(() => {
-    if (isManager || isEmployee) {
-      fetchDrivers();
-      const interval = setInterval(fetchDrivers, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [isManager, isEmployee]);
+  usePollingTask(fetchDrivers, isManager || isEmployee, 30000);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -90,7 +89,9 @@ export default function DriversPage() {
     setFormError(null);
 
     if (!formData.category) {
-      setFormError('Veuillez sélectionner une catégorie (Éco / Climatisé / VIP).');
+      setFormError(
+        'Veuillez sélectionner une catégorie (Éco / Climatisé / VIP).'
+      );
       return;
     }
 
@@ -134,9 +135,11 @@ export default function DriversPage() {
 
     setResendLoadingMap((m) => ({ ...m, [driverId]: true }));
     try {
-      const { data } = await api.post<{ detail?: string; email_sent?: boolean; email_error?: string }>(
-        `/drivers/${driverId}/resend-invite/`
-      );
+      const { data } = await api.post<{
+        detail?: string;
+        email_sent?: boolean;
+        email_error?: string;
+      }>(`/drivers/${driverId}/resend-invite/`);
 
       const detail = data?.detail || 'Invitation renvoyée.';
       const suffix =
@@ -201,7 +204,7 @@ export default function DriversPage() {
         !currentlyBlocked ? 'Chauffeur bloqué.' : 'Chauffeur débloqué.'
       );
     } catch (err: unknown) {
-      let detail = "Erreur lors de la mise à jour du statut du chauffeur";
+      let detail = 'Erreur lors de la mise à jour du statut du chauffeur';
       if (isAxiosError(err)) {
         const d = err.response?.data;
         if (typeof d === 'string') detail = d;
@@ -354,13 +357,19 @@ export default function DriversPage() {
                         <td className="p-2">{d.vehicle_plate || '—'}</td>
                         <td className="p-2 uppercase">{d.category || '—'}</td>
                         <td className="p-2">
-                          {d.created_at ? new Date(d.created_at).toLocaleString() : '—'}
+                          {d.created_at
+                            ? new Date(d.created_at).toLocaleString()
+                            : '—'}
                         </td>
                         <td className="p-2">
                           {d.onboarding_completed ? (
-                            <span className="text-green-700 font-semibold">OK</span>
+                            <span className="text-green-700 font-semibold">
+                              OK
+                            </span>
                           ) : (
-                            <span className="text-yellow-700 font-semibold">En attente</span>
+                            <span className="text-yellow-700 font-semibold">
+                              En attente
+                            </span>
                           )}
                         </td>
                         <td className="p-2">
@@ -370,7 +379,9 @@ export default function DriversPage() {
                               {d.block_reason ? ` (${d.block_reason})` : ''}
                             </span>
                           ) : (
-                            <span className="text-green-700 font-semibold">Actif</span>
+                            <span className="text-green-700 font-semibold">
+                              Actif
+                            </span>
                           )}
                         </td>
                         <td className="p-2 flex items-center gap-2">
@@ -403,7 +414,9 @@ export default function DriversPage() {
                               d.is_blocked
                                 ? 'bg-green-600 hover:bg-green-700'
                                 : 'bg-red-600 hover:bg-red-700'
-                            } ${isBlocking ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            } ${
+                              isBlocking ? 'opacity-60 cursor-not-allowed' : ''
+                            }`}
                           >
                             {isBlocking
                               ? '...'

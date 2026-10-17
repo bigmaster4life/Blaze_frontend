@@ -1,22 +1,43 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import Link from 'next/link';
 import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip,
-  BarChart, Bar, PieChart, Pie, Cell, Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from 'recharts';
-import { getAccessToken } from '@/utils/api';
+import api, { getAccessToken, API_BASE } from '@/utils/api';
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api').replace(/\/+$/,'');
-const WS_BASE  = (process.env.NEXT_PUBLIC_WS_BASE  || 'ws://localhost:8000').replace(/\/+$/,'');
+const WS_BASE = (
+  process.env.NEXT_PUBLIC_WS_BASE ||
+  new URL(API_BASE).origin.replace(/^http/, 'ws')
+).replace(/\/+$/, '');
 
 // ---- classes / helpers d'erreurs
 class ApiError extends Error {
   code?: 'NO_TOKEN' | string;
   status?: number;
   body?: unknown;
-  constructor(message: string, opts?: { code?: string; status?: number; body?: unknown }) {
+  constructor(
+    message: string,
+    opts?: { code?: string; status?: number; body?: unknown }
+  ) {
     super(message);
     this.code = opts?.code;
     this.status = opts?.status;
@@ -55,32 +76,38 @@ type LiveRow = {
 
 // ---- fetch JSON (Bearer obligatoire)
 async function getJSON<T>(url: string, params?: Record<string, string>) {
-  const qs = params ? `?${new URLSearchParams(params).toString()}` : '';
-  const access = getAccessToken();
-  if (!access) {
-    throw new ApiError('NO_TOKEN', { code: 'NO_TOKEN' });
+  try {
+    return (await api.get<T>(url, { params })).data;
+  } catch (error) {
+    const failure = error as {
+      response?: { status?: number; data?: unknown };
+      message?: string;
+    };
+    throw new ApiError(failure.message || 'Chargement impossible', {
+      status: failure.response?.status,
+      body: failure.response?.data,
+    });
   }
-  const res = await fetch(`${url}${qs}`, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${access}`,
-    },
-  });
-  if (!res.ok) {
-    let body: unknown = null;
-    try { body = await res.json(); } catch { /* no-op */ }
-    throw new ApiError(`HTTP_${res.status}`, { status: res.status, body });
-  }
-  return (await res.json()) as T;
 }
 
 function currencyXAF(n?: number) {
   const v = Number(n || 0);
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 }).format(v);
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'XAF',
+    maximumFractionDigits: 0,
+  }).format(v);
 }
 
-function Card({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
+function Card({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div className={`bg-white rounded-2xl shadow p-4 ${className ?? ''}`}>
       <div className="flex items-center justify-between mb-2">
@@ -94,7 +121,9 @@ function Kpi({ title, value }: { title: string; value: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl shadow p-4">
       <div className="text-sm text-slate-500">{title}</div>
-      <div className="text-2xl font-extrabold text-slate-900 mt-1">{value ?? '—'}</div>
+      <div className="text-2xl font-extrabold text-slate-900 mt-1">
+        {value ?? '—'}
+      </div>
     </div>
   );
 }
@@ -105,29 +134,50 @@ export default function AnalyticsPage() {
 
   // filtres
   const [city, setCity] = useState('');
-  const [range, setRange] = useState<{ from: string; to: string }>({ from: '', to: '' });
+  const [range, setRange] = useState<{ from: string; to: string }>({
+    from: '',
+    to: '',
+  });
 
   // états
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [ridesPerHour, setRidesPerHour] = useState<{ t: string; rides: number }[]>([]);
-  const [revenueDaily, setRevenueDaily] = useState<{ d: string; gmv: number; commission: number }[]>([]);
-  const [paymentSplit, setPaymentSplit] = useState<Record<'cash' | 'mobile_money' | 'wallet', number>>({ cash: 0, mobile_money: 0, wallet: 0 });
-  const [drivers, setDrivers] = useState<{ id: number; name: string; rides: number; rating: number; revenue: number }[]>([]);
-  const [issues, setIssues] = useState<{ ts: string; type: string; message: string; count: number }[]>([]);
+  const [ridesPerHour, setRidesPerHour] = useState<
+    { t: string; rides: number }[]
+  >([]);
+  const [revenueDaily, setRevenueDaily] = useState<
+    { d: string; gmv: number; commission: number }[]
+  >([]);
+  const [paymentSplit, setPaymentSplit] = useState<
+    Record<'cash' | 'mobile_money' | 'wallet', number>
+  >({ cash: 0, mobile_money: 0, wallet: 0 });
+  const [drivers, setDrivers] = useState<
+    {
+      id: number;
+      name: string;
+      rides: number;
+      rating: number;
+      revenue: number;
+    }[]
+  >([]);
+  const [issues, setIssues] = useState<
+    { ts: string; type: string; message: string; count: number }[]
+  >([]);
   const [live, setLive] = useState<LiveRow[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  const [wsStatus, setWsStatus] = useState<'closed'|'connecting'|'open'>('closed');
+  const [wsStatus, setWsStatus] = useState<'closed' | 'connecting' | 'open'>(
+    'closed'
+  );
   const retryRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
 
   const params = useMemo(() => {
     const p: Record<string, string> = {};
     if (range.from) p.from = range.from;
-    if (range.to)   p.to   = range.to;
-    if (city)       p.city = city;
+    if (range.to) p.to = range.to;
+    if (city) p.city = city;
     return p;
   }, [range.from, range.to, city]);
 
@@ -135,14 +185,19 @@ export default function AnalyticsPage() {
 
   const explainErr = (e: ApiError | Error | unknown) => {
     if (isApiError(e)) {
-      if (e.code === 'NO_TOKEN') return "Non authentifié : aucun jeton d’accès (JWT). Connecte-toi pour obtenir un token.";
-      if (e.status === 401)       return "Non autorisé (401). Token invalide/expiré.";
-      if (e.status === 403)       return "Accès refusé (403). Permissions insuffisantes.";
-      if (e.status && e.body)     return `Erreur ${e.status} : ${typeof e.body === 'string' ? e.body : JSON.stringify(e.body)}`;
-      return e.message || "Erreur inconnue côté API.";
+      if (e.code === 'NO_TOKEN')
+        return 'Non authentifié : aucun jeton d’accès (JWT). Connecte-toi pour obtenir un token.';
+      if (e.status === 401) return 'Non autorisé (401). Token invalide/expiré.';
+      if (e.status === 403)
+        return 'Accès refusé (403). Permissions insuffisantes.';
+      if (e.status && e.body)
+        return `Erreur ${e.status} : ${
+          typeof e.body === 'string' ? e.body : JSON.stringify(e.body)
+        }`;
+      return e.message || 'Erreur inconnue côté API.';
     }
-    if (e instanceof Error) return e.message || "Erreur inconnue.";
-    return "Échec du chargement des données. Vérifie l’API, l’ASGI (Daphne) et CORS.";
+    if (e instanceof Error) return e.message || 'Erreur inconnue.';
+    return 'Échec du chargement des données. Vérifie l’API, l’ASGI (Daphne) et CORS.';
   };
 
   const loadAll = useCallback(async () => {
@@ -157,13 +212,30 @@ export default function AnalyticsPage() {
           day: new Date().toISOString().slice(0, 10),
           ...(city ? { city } : {}),
         }),
-        getJSON<{ d: string; gmv: number; commission: number }[]>(`${base}/revenue_daily/`, params),
-        getJSON<Record<'cash' | 'mobile_money' | 'wallet', number>>(`${base}/payment_split/`, params),
-        getJSON<{ id: number; name: string; rides: number; rating: number; revenue: number }[]>(`${base}/top_drivers/`, {
+        getJSON<{ d: string; gmv: number; commission: number }[]>(
+          `${base}/revenue_daily/`,
+          params
+        ),
+        getJSON<Record<'cash' | 'mobile_money' | 'wallet', number>>(
+          `${base}/payment_split/`,
+          params
+        ),
+        getJSON<
+          {
+            id: number;
+            name: string;
+            rides: number;
+            rating: number;
+            revenue: number;
+          }[]
+        >(`${base}/top_drivers/`, {
           ...params,
           limit: '10',
         }),
-        getJSON<{ ts: string; type: string; message: string; count: number }[]>(`${base}/issues/`, { limit: '30' }),
+        getJSON<{ ts: string; type: string; message: string; count: number }[]>(
+          `${base}/issues/`,
+          { limit: '30' }
+        ),
         getJSON<LiveRow[]>(`${base}/live/`, { limit: '30' }),
       ]);
 
@@ -214,7 +286,13 @@ export default function AnalyticsPage() {
 
       ws.onmessage = (ev) => {
         try {
-          const msg = JSON.parse(ev.data) as { type?: string; payload?: unknown; ts?: string; severity?: string; message?: string };
+          const msg = JSON.parse(ev.data) as {
+            type?: string;
+            payload?: unknown;
+            ts?: string;
+            severity?: string;
+            message?: string;
+          };
           switch (msg?.type) {
             case 'ride.status_changed':
             case 'rental.status_changed':
@@ -224,15 +302,24 @@ export default function AnalyticsPage() {
               loadAll();
               break;
             case 'system.issue':
-              setIssues((prev) => [
-                { ts: msg.ts || new Date().toISOString(), type: msg.severity || 'issue', message: msg.message || '—', count: 1 },
-                ...prev,
-              ].slice(0, 50));
+              setIssues((prev) =>
+                [
+                  {
+                    ts: msg.ts || new Date().toISOString(),
+                    type: msg.severity || 'issue',
+                    message: msg.message || '—',
+                    count: 1,
+                  },
+                  ...prev,
+                ].slice(0, 50)
+              );
               break;
             default:
               break;
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       };
 
       ws.onclose = () => {
@@ -244,7 +331,11 @@ export default function AnalyticsPage() {
         }, delay);
       };
 
-      ws.onerror = () => { try { ws.close(); } catch {} };
+      ws.onerror = () => {
+        try {
+          ws.close();
+        } catch {}
+      };
     } catch {
       setWsStatus('closed');
     }
@@ -252,7 +343,12 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     openWS();
-    return () => { try { wsRef.current?.close(); } catch {}; wsRef.current = null; };
+    return () => {
+      try {
+        wsRef.current?.close();
+      } catch {}
+      wsRef.current = null;
+    };
   }, [openWS]);
 
   const pieData = useMemo(
@@ -271,11 +367,17 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold">📊 Analytique</h1>
-          <span className={`text-xs px-2 py-1 rounded ${
-            wsStatus === 'open' ? 'bg-green-100 text-green-700'
-            : wsStatus === 'connecting' ? 'bg-amber-100 text-amber-700'
-            : 'bg-slate-100 text-slate-600'
-          }`}>WS: {wsStatus}</span>
+          <span
+            className={`text-xs px-2 py-1 rounded ${
+              wsStatus === 'open'
+                ? 'bg-green-100 text-green-700'
+                : wsStatus === 'connecting'
+                ? 'bg-amber-100 text-amber-700'
+                : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            WS: {wsStatus}
+          </span>
         </div>
         {/* ➜ Bouton Retour Dashboard */}
         <Link
@@ -289,7 +391,10 @@ export default function AnalyticsPage() {
       {/* bandeau login si token manquant (client only) */}
       {mounted && tokenMissing && (
         <div className="bg-amber-50 text-amber-800 border border-amber-200 rounded px-4 py-3">
-          Vous n’êtes pas authentifié(e). <a href="/login" className="underline font-semibold">Se connecter</a>
+          Vous n’êtes pas authentifié(e).{' '}
+          <a href="/login" className="underline font-semibold">
+            Se connecter
+          </a>
         </div>
       )}
 
@@ -312,7 +417,9 @@ export default function AnalyticsPage() {
           />
         </div>
         <div>
-          <label className="block text-sm font-semibold mb-1">Période — du</label>
+          <label className="block text-sm font-semibold mb-1">
+            Période — du
+          </label>
           <input
             type="date"
             className="border rounded px-3 py-2"
@@ -341,17 +448,52 @@ export default function AnalyticsPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
         <Kpi title="Courses en cours" value={summary?.rides_live ?? '—'} />
-        <Kpi title="En attente pickup" value={summary?.rides_waiting_pickup ?? '—'} />
-        <Kpi title="Courses complétées" value={summary?.rides_completed ?? '—'} />
-        <Kpi title="Taux d’annulation" value={summary ? `${(summary.cancel_rate * 100).toFixed(1)} %` : '—'} />
-        <Kpi title="Pickup moyen" value={summary ? `${Math.round(summary.avg_pickup_time_sec / 60)} min` : '—'} />
-        <Kpi title="Durée moyenne" value={summary ? `${Math.round(summary.avg_ride_duration_sec / 60)} min` : '—'} />
+        <Kpi
+          title="En attente pickup"
+          value={summary?.rides_waiting_pickup ?? '—'}
+        />
+        <Kpi
+          title="Courses complétées"
+          value={summary?.rides_completed ?? '—'}
+        />
+        <Kpi
+          title="Taux d’annulation"
+          value={summary ? `${(summary.cancel_rate * 100).toFixed(1)} %` : '—'}
+        />
+        <Kpi
+          title="Pickup moyen"
+          value={
+            summary
+              ? `${Math.round(summary.avg_pickup_time_sec / 60)} min`
+              : '—'
+          }
+        />
+        <Kpi
+          title="Durée moyenne"
+          value={
+            summary
+              ? `${Math.round(summary.avg_ride_duration_sec / 60)} min`
+              : '—'
+          }
+        />
         <Kpi title="Loc. actives" value={summary?.rentals_active ?? '—'} />
-        <Kpi title="Incidents (1h)" value={summary?.incidents_last_hour ?? '—'} />
+        <Kpi
+          title="Incidents (1h)"
+          value={summary?.incidents_last_hour ?? '—'}
+        />
         <Kpi title="Tickets ouverts" value={summary?.tickets_open ?? '—'} />
-        <Kpi title="GMV (période)" value={summary ? currencyXAF(summary.gmv) : '—'} />
-        <Kpi title="Gains chauffeurs" value={summary ? currencyXAF(summary.drivers_earnings) : '—'} />
-        <Kpi title="Commission plateforme" value={summary ? currencyXAF(summary.platform_commission) : '—'} />
+        <Kpi
+          title="GMV (période)"
+          value={summary ? currencyXAF(summary.gmv) : '—'}
+        />
+        <Kpi
+          title="Gains chauffeurs"
+          value={summary ? currencyXAF(summary.drivers_earnings) : '—'}
+        />
+        <Kpi
+          title="Commission plateforme"
+          value={summary ? currencyXAF(summary.platform_commission) : '—'}
+        />
       </div>
 
       {/* Graphiques */}
@@ -359,7 +501,10 @@ export default function AnalyticsPage() {
         <Card title="Courses par heure (aujourd’hui)" className="xl:col-span-2">
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={ridesPerHour}>
-              <XAxis dataKey="t" tickFormatter={(v) => String(v).slice(11, 16)} />
+              <XAxis
+                dataKey="t"
+                tickFormatter={(v) => String(v).slice(11, 16)}
+              />
               <YAxis />
               <Tooltip />
               <Line type="monotone" dataKey="rides" dot={false} />
@@ -370,7 +515,13 @@ export default function AnalyticsPage() {
         <Card title="Répartition paiements (période)">
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
-              <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={100} label>
+              <Pie
+                data={pieData}
+                dataKey="value"
+                nameKey="name"
+                outerRadius={100}
+                label
+              >
                 {pieData.map((_, i) => (
                   <Cell key={i} />
                 ))}
@@ -411,7 +562,10 @@ export default function AnalyticsPage() {
               </thead>
               <tbody>
                 {live.map((row) => (
-                  <tr key={`${row.type}-${row.id}-${row.updatedAt}`} className="border-b last:border-0">
+                  <tr
+                    key={`${row.type}-${row.id}-${row.updatedAt}`}
+                    className="border-b last:border-0"
+                  >
                     <td className="py-2">{row.type}</td>
                     <td>{row.status}</td>
                     <td>{row.city}</td>

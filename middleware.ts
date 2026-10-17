@@ -1,16 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export function middleware(request: NextRequest) {
-  const accessToken = request.cookies.get('access_token');
-
-  // 🔐 Si pas de token, rediriger vers /login
-  if (!accessToken) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
+// La présence d'un cookie d'accès n'indique pas si une session est valide.
+// AuthProvider restaure le JWT depuis le stockage puis vérifie /users/me/ ;
+// AppShell bloque les pages privées, et Django applique les droits des API.
+export function middleware() {
   return NextResponse.next();
 }
-
-export const config = {
-  matcher: ['/dashboard/:path*', '/drivers/:path*'], // ✅ Toutes les routes protégées ici
-};
+export const config = { matcher: ['/dashboard/:path*', '/drivers/:path*'] };

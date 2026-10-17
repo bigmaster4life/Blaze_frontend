@@ -1,80 +1,106 @@
 'use client';
-
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-
+const modules = [
+  {
+    href: '/operator',
+    label: 'Opérations',
+    tag: 'SUPERVISION',
+    description:
+      'Suivez les demandes et identifiez celles qui nécessitent une intervention.',
+    action: 'Ouvrir les opérations',
+  },
+  {
+    href: '/drivers',
+    label: 'Chauffeurs VTC',
+    tag: 'MOBILITÉ',
+    description:
+      'Invitez un chauffeur, vérifiez son dossier et gérez son accès.',
+    action: 'Gérer les chauffeurs',
+  },
+  {
+    href: '/delivery-drivers',
+    label: 'Livreurs',
+    tag: 'LIVRAISON',
+    description:
+      'Consultez les profils, les documents et la disponibilité des livreurs.',
+    action: 'Gérer les livreurs',
+  },
+  {
+    href: '/locations',
+    label: 'Locations',
+    tag: 'RÉSERVATIONS',
+    description:
+      'Retrouvez les réservations et les informations utiles à leur suivi.',
+    action: 'Voir les locations',
+  },
+  {
+    href: '/users',
+    label: 'Utilisateurs et équipe',
+    tag: 'ACCÈS',
+    description:
+      'Retrouvez les utilisateurs et créez les comptes de votre équipe selon vos droits.',
+    action: 'Gérer les utilisateurs',
+  },
+  {
+    href: '/analytics',
+    label: 'Analyses',
+    tag: 'ACTIVITÉ',
+    description:
+      'Consultez les indicateurs et les données disponibles pour la période choisie.',
+    action: 'Consulter les analyses',
+  },
+];
 export default function DashboardPage() {
-  const { logout } = useAuth();
-
+  const { user } = useAuth();
+  const owner =
+    user?.user_type === 'loueur' && !user.is_staff && !user.is_superuser;
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Tableau de bord Blaze</h1>
-        <button
-          onClick={logout}
-          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition"
+    <div className="page-stack">
+      <section className="dashboard-welcome">
+        <div>
+          <span className="eyebrow">VOTRE ESPACE DE TRAVAIL</span>
+          <h1>Bonjour{user?.first_name ? ` ${user.first_name}` : ''}.</h1>
+          <p>
+            Retrouvez vos outils de gestion et accédez directement à vos
+            opérations.
+          </p>
+        </div>
+        <Link
+          className="button-primary"
+          href={owner ? '/add-vehicle' : '/operator'}
         >
-          Se déconnecter
-        </button>
+          {owner ? 'Ajouter un véhicule' : 'Voir les opérations'}{' '}
+          <span aria-hidden>↗</span>
+        </Link>
+      </section>
+      <div className="section-heading">
+        <h2>Gérer l’activité</h2>
+        <span>Choisissez un espace pour commencer</span>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Link
-          href="/operator"
-          className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
-        >
-          <h2 className="text-xl font-semibold mb-2">🎛️ Operator Center</h2>
-          <p>Supervisez les demandes VTC, Delivery et Location en temps réel.</p>
-        </Link>
-        
-        <Link
-          href="/add-vehicle"
-          className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
-        >
-          <h2 className="text-xl font-semibold mb-2">🚘 Ajouter un véhicule</h2>
-          <p>Ajoutez un véhicule à la plateforme Blaze.</p>
-        </Link>
-
-        <Link
-          href="/drivers"
-          className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
-        >
-          <h2 className="text-xl font-semibold mb-2">🧑‍✈️ Chauffeurs</h2>
-          <p>Gérez les chauffeurs enregistrés sur la plateforme.</p>
-        </Link>
-
-        <Link
-          href="/delivery-drivers"
-          className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
-        >
-          <h2 className="text-xl font-semibold mb-2">🛵 Livreurs</h2>
-          <p>Gérez les livreurs, leurs statuts et leurs disponibilités.</p>
-        </Link>
-
-        <Link
-          href="/users"
-          className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
-        >
-          <h2 className="text-xl font-semibold mb-2">👤 Utilisateurs</h2>
-          <p>Liste et gestion des utilisateurs Blaze.</p>
-        </Link>
-
-        <Link
-          href="/settings"
-          className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
-        >
-          <h2 className="text-xl font-semibold mb-2">⚙️ Paramètres</h2>
-          <p>Modifier les préférences ou les données générales.</p>
-        </Link>
-
-        <Link
-          href="/analytics"
-          className="block border p-6 rounded-lg shadow hover:bg-gray-50 transition"
-        >
-          <h2 className="text-xl font-semibold mb-2">📊 Analytique</h2>
-          <p>{"Voir les statistiques d'utilisation et les données clés."}</p>
-        </Link>
+      <div className="module-grid">
+        {modules
+          .filter((module) => !owner || module.href === '/locations')
+          .map((module) => (
+            <Link href={module.href} key={module.href} className="module-card">
+              <span className="eyebrow">{module.tag}</span>
+              <h2>{module.label}</h2>
+              <p>{module.description}</p>
+              <span className="module-action">
+                {module.action}
+                <span aria-hidden>↗</span>
+              </span>
+            </Link>
+          ))}
       </div>
+      <section className="info-banner">
+        <strong>Chaque membre de l’équipe utilise son propre accès.</strong>
+        <p>
+          La page Utilisateurs distingue les comptes enregistrés et la création
+          de comptes d’équipe. Les droits de création sont réservés aux
+          gestionnaires autorisés.
+        </p>
+      </section>
     </div>
   );
 }

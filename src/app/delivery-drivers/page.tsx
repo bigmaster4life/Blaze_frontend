@@ -1,12 +1,18 @@
 'use client';
+import { usePollingTask } from '@/hooks/usePollingTask';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { isAxiosError } from 'axios';
 import api from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
 
-type City = 'libreville' | 'owendo' | 'angondje' | 'port_gentil' | 'franceville';
+type City =
+  | 'libreville'
+  | 'owendo'
+  | 'angondje'
+  | 'port_gentil'
+  | 'franceville';
 type VehicleType = 'moto' | 'car' | 'van';
 
 type ApiErrorDetail = {
@@ -43,7 +49,12 @@ export default function DeliveryDriversPage() {
 
   const isAllowed = useMemo(() => {
     const t = user?.user_type;
-    return t === 'admin' || t === 'manager_staff' || t === 'employee_staff' || t === 'staff';
+    return (
+      t === 'admin' ||
+      t === 'manager_staff' ||
+      t === 'employee_staff' ||
+      t === 'staff'
+    );
   }, [user?.user_type]);
 
   const [drivers, setDrivers] = useState<DeliveryDriverRow[]>([]);
@@ -61,13 +72,21 @@ export default function DeliveryDriversPage() {
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [resendLoadingMap, setResendLoadingMap] = useState<Record<number, boolean>>({});
-  const [blockLoadingMap, setBlockLoadingMap] = useState<Record<number, boolean>>({});
-  const [validateLoadingMap, setValidateLoadingMap] = useState<Record<number, boolean>>({});
+  const [resendLoadingMap, setResendLoadingMap] = useState<
+    Record<number, boolean>
+  >({});
+  const [blockLoadingMap, setBlockLoadingMap] = useState<
+    Record<number, boolean>
+  >({});
+  const [validateLoadingMap, setValidateLoadingMap] = useState<
+    Record<number, boolean>
+  >({});
 
   const fetchDrivers = async () => {
     try {
-      const { data } = await api.get<DeliveryDriverRow[]>('/delivery/admin/drivers/');
+      const { data } = await api.get<DeliveryDriverRow[]>(
+        '/delivery/admin/drivers/'
+      );
       setDrivers(data || []);
       setListError(null);
     } catch (err: unknown) {
@@ -82,12 +101,7 @@ export default function DeliveryDriversPage() {
     }
   };
 
-  useEffect(() => {
-    if (!isAllowed) return;
-    fetchDrivers();
-    const i = setInterval(fetchDrivers, 30000);
-    return () => clearInterval(i);
-  }, [isAllowed]);
+  usePollingTask(fetchDrivers, isAllowed, 30000);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -206,7 +220,9 @@ export default function DeliveryDriversPage() {
         )
       );
 
-      setFormSuccess(!currentlyBlocked ? 'Livreur bloqué.' : 'Livreur débloqué.');
+      setFormSuccess(
+        !currentlyBlocked ? 'Livreur bloqué.' : 'Livreur débloqué.'
+      );
     } catch (err: unknown) {
       let detail = 'Erreur lors de la mise à jour du statut du livreur';
       if (isAxiosError(err)) {
@@ -436,7 +452,11 @@ export default function DeliveryDriversPage() {
                             : 'bg-red-600 hover:bg-red-700'
                         } ${isBlocking ? 'opacity-60 cursor-not-allowed' : ''}`}
                       >
-                        {isBlocking ? '...' : isBlocked ? 'Débloquer' : 'Bloquer'}
+                        {isBlocking
+                          ? '...'
+                          : isBlocked
+                          ? 'Débloquer'
+                          : 'Bloquer'}
                       </button>
 
                       <button
@@ -446,10 +466,18 @@ export default function DeliveryDriversPage() {
                           d.is_verified
                             ? 'bg-gray-400 cursor-not-allowed'
                             : 'bg-emerald-600 hover:bg-emerald-700'
-                        } ${isValidating ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        title={d.is_verified ? 'Déjà validé' : 'Valider le livreur'}
+                        } ${
+                          isValidating ? 'opacity-60 cursor-not-allowed' : ''
+                        }`}
+                        title={
+                          d.is_verified ? 'Déjà validé' : 'Valider le livreur'
+                        }
                       >
-                        {isValidating ? '...' : d.is_verified ? 'Validé' : 'Valider'}
+                        {isValidating
+                          ? '...'
+                          : d.is_verified
+                          ? 'Validé'
+                          : 'Valider'}
                       </button>
                     </td>
                   </tr>

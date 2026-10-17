@@ -1,14 +1,15 @@
 'use client';
+import { usePollingTask } from '@/hooks/usePollingTask';
 
 import { useEffect, useMemo, useState } from 'react';
-import api from '@/utils/api';
+import api, { apiErrorMessage } from '@/utils/api';
 import Link from 'next/link';
 
 type TabKey = 'overview' | 'vtc' | 'delivery' | 'rental';
 
 type StatCard = {
   label: string;
-  value: number;
+  value: number | null;
   color: string;
 };
 
@@ -36,55 +37,55 @@ const tabs: { key: TabKey; label: string }[] = [
 
 export default function OperatorPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
-  const [deliveryRequests, setDeliveryRequests] = useState<DeliveryOperatorRequest[]>([]);
+  const [deliveryRequests, setDeliveryRequests] = useState<
+    DeliveryOperatorRequest[]
+  >([]);
   const [deliveryLoading, setDeliveryLoading] = useState<boolean>(true);
+  const [deliveryError, setDeliveryError] = useState('');
 
   const loadDeliveryRequests = async (): Promise<void> => {
     try {
-      const { data } = await api.get<DeliveryOperatorRequest[]>('/delivery/operator-queue/');
-      setDeliveryRequests(Array.isArray(data) ? data : []);
+      const { data } = await api.get<DeliveryOperatorRequest[]>(
+        '/delivery/operator-queue/'
+      );
+      if (!Array.isArray(data))
+        throw new Error('La liste des demandes est indisponible.');
+      setDeliveryRequests(data);
+      setDeliveryError('');
     } catch (error: unknown) {
-      console.error('Operator delivery queue error', error);
-      setDeliveryRequests([]);
+      setDeliveryError(apiErrorMessage(error));
     } finally {
       setDeliveryLoading(false);
     }
   };
 
-  useEffect(() => {
-    void loadDeliveryRequests();
-
-    const interval = setInterval(() => {
-      void loadDeliveryRequests();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
+  usePollingTask(loadDeliveryRequests, true, 10000);
 
   const stats = useMemo<StatCard[]>(
     () => [
       {
         label: 'Demandes VTC en attente',
-        value: 0,
+        value: null,
         color: 'bg-orange-100 text-orange-700',
       },
       {
         label: 'Demandes Delivery opérateur',
-        value: deliveryRequests.length,
+        value:
+          deliveryError || deliveryLoading ? null : deliveryRequests.length,
         color: 'bg-red-100 text-red-700',
       },
       {
         label: 'Courses en cours',
-        value: 0,
+        value: null,
         color: 'bg-blue-100 text-blue-700',
       },
       {
         label: 'Incidents Location',
-        value: 0,
+        value: null,
         color: 'bg-purple-100 text-purple-700',
       },
     ],
-    [deliveryRequests.length]
+    [deliveryRequests.length, deliveryError, deliveryLoading]
   );
 
   return (
@@ -94,25 +95,41 @@ export default function OperatorPage() {
           href="/"
           className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
         >
-            ← Retour au dashboard
+          ← Retour au dashboard
         </Link>
-      </div>  
-      
+      </div>
+
       <div className="rounded-2xl bg-white shadow-sm border p-6">
         <h1 className="text-3xl font-bold text-gray-900">Operator Center</h1>
         <p className="text-gray-600 mt-2">
-          Supervision temps réel des demandes VTC, Delivery et Location.
+          Consultez la file des livraisons nécessitant une intervention. Les
+          indicateurs VTC et location restent à connecter.
         </p>
       </div>
 
+      {deliveryError && (
+        <div className="notice-error" role="alert">
+          {deliveryError}{' '}
+          <button
+            className="button-quiet"
+            onClick={() => void loadDeliveryRequests()}
+          >
+            Réessayer
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {stats.map((item) => (
           <div
             key={item.label}
             className="rounded-2xl border bg-white p-5 shadow-sm"
           >
-            <div className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${item.color}`}>
-              {deliveryLoading && item.label === 'Demandes Delivery opérateur' ? '...' : item.value}
+            <div
+              className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${item.color}`}
+            >
+              {deliveryLoading && item.label === 'Demandes Delivery opérateur'
+                ? '…'
+                : item.value ?? 'Non disponible'}
             </div>
             <p className="mt-3 text-sm text-gray-600">{item.label}</p>
           </div>
@@ -141,7 +158,11 @@ export default function OperatorPage() {
       </div>
 
       {activeTab === 'overview' && (
-        <OverviewTab deliveryCount={deliveryRequests.length} />
+        <OverviewTab
+          deliveryCount={
+            deliveryError || deliveryLoading ? null : deliveryRequests.length
+          }
+        />
       )}
       {activeTab === 'vtc' && <VtcTab />}
       {activeTab === 'delivery' && (
@@ -156,34 +177,40 @@ export default function OperatorPage() {
   );
 }
 
-function OverviewTab({ deliveryCount }: { deliveryCount: number }) {
+function OverviewTab({ deliveryCount }: { deliveryCount: number | null }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div className="xl:col-span-2 rounded-2xl bg-white border shadow-sm p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Flux opérationnels</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">
+          Flux opérationnels
+        </h2>
 
         <div className="space-y-4">
           <div className="rounded-xl border p-4">
             <h3 className="font-semibold text-gray-900">VTC</h3>
             <p className="text-sm text-gray-600 mt-1">
-              Voir les demandes en attente, les courses sans chauffeur, les courses en cours et les blocages.
+              Voir les demandes en attente, les courses sans chauffeur, les
+              courses en cours et les blocages.
             </p>
           </div>
 
           <div className="rounded-xl border p-4">
             <h3 className="font-semibold text-gray-900">Delivery</h3>
             <p className="text-sm text-gray-600 mt-1">
-              Gérer les demandes operator_required, failed, les assignations manuelles et les suivis sensibles.
+              Gérer les demandes operator_required, failed, les assignations
+              manuelles et les suivis sensibles.
             </p>
             <p className="mt-2 text-sm font-semibold text-red-600">
-              {deliveryCount} demande(s) nécessitent une attention opérateur.
+              {deliveryCount ?? '—'} demande(s) nécessitent une attention
+              opérateur.
             </p>
           </div>
 
           <div className="rounded-xl border p-4">
             <h3 className="font-semibold text-gray-900">Location</h3>
             <p className="text-sm text-gray-600 mt-1">
-              Superviser les réservations, incidents, indisponibilités véhicules et contacts propriétaires.
+              Superviser les réservations, incidents, indisponibilités véhicules
+              et contacts propriétaires.
             </p>
           </div>
         </div>
@@ -194,7 +221,7 @@ function OverviewTab({ deliveryCount }: { deliveryCount: number }) {
 
         <div className="space-y-3 text-sm text-gray-600">
           <div className="rounded-xl bg-red-50 border border-red-100 p-4">
-            Delivery operator_required / failed : {deliveryCount}
+            Delivery operator_required / failed : {deliveryCount ?? '—'}
           </div>
           <div className="rounded-xl bg-orange-50 border border-orange-100 p-4">
             VTC sans chauffeur
@@ -214,8 +241,8 @@ function VtcTab() {
       <h2 className="text-xl font-bold text-gray-900 mb-4">Demandes VTC</h2>
 
       <p className="text-sm text-gray-500">
-        Cette section affichera les demandes VTC en attente, les courses en cours
-        et permettra d’assigner un chauffeur manuellement.
+        Cette section affichera les demandes VTC en attente, les courses en
+        cours et permettra d’assigner un chauffeur manuellement.
       </p>
     </div>
   );
@@ -228,12 +255,14 @@ type DeliveryTabProps = {
 };
 
 function DeliveryTab({ requests, loading, onRefresh }: DeliveryTabProps) {
-  const [selectedRequest, setSelectedRequest] = useState<DeliveryOperatorRequest | null>(null);
+  const [selectedRequest, setSelectedRequest] =
+    useState<DeliveryOperatorRequest | null>(null);
 
   useEffect(() => {
     if (!selectedRequest) return;
 
-    const freshSelected = requests.find((request) => request.id === selectedRequest.id) || null;
+    const freshSelected =
+      requests.find((request) => request.id === selectedRequest.id) || null;
     setSelectedRequest(freshSelected);
   }, [requests, selectedRequest]);
 
@@ -283,7 +312,8 @@ function DeliveryTab({ requests, loading, onRefresh }: DeliveryTabProps) {
                     <td className="px-4 py-3 font-semibold">{request.id}</td>
 
                     <td className="px-4 py-3">
-                      {(request.pickup_zone || '—')} → {(request.dropoff_zone || '—')}
+                      {request.pickup_zone || '—'} →{' '}
+                      {request.dropoff_zone || '—'}
                     </td>
 
                     <td className="px-4 py-3">{request.vehicle_type}</td>
@@ -315,52 +345,71 @@ function DeliveryTab({ requests, loading, onRefresh }: DeliveryTabProps) {
       </div>
 
       <div className="rounded-2xl bg-white border shadow-sm p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">
-          Détail demande
-        </h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Détail demande</h2>
 
         {!selectedRequest && (
           <div className="rounded-xl bg-gray-50 border border-dashed p-6 text-sm text-gray-500">
-            Cliquez sur une demande pour afficher les détails,
-            la carte et les actions opérateur.
+            Cliquez sur une demande pour afficher les détails, la carte et les
+            actions opérateur.
           </div>
         )}
 
         {selectedRequest && (
           <div className="space-y-3 text-sm text-gray-700">
-            <div><span className="font-semibold">ID :</span> {selectedRequest.id}</div>
-            <div><span className="font-semibold">Type :</span> {selectedRequest.type}</div>
             <div>
-              <span className="font-semibold">Zone récupération :</span> {selectedRequest.pickup_zone || '—'}
+              <span className="font-semibold">ID :</span> {selectedRequest.id}
             </div>
             <div>
-              <span className="font-semibold">Zone livraison :</span> {selectedRequest.dropoff_zone || '—'}
+              <span className="font-semibold">Type :</span>{' '}
+              {selectedRequest.type}
             </div>
             <div>
-              <span className="font-semibold">Adresse départ :</span> {selectedRequest.pickup_label}
+              <span className="font-semibold">Zone récupération :</span>{' '}
+              {selectedRequest.pickup_zone || '—'}
             </div>
             <div>
-              <span className="font-semibold">Adresse arrivée :</span> {selectedRequest.dropoff_label}
+              <span className="font-semibold">Zone livraison :</span>{' '}
+              {selectedRequest.dropoff_zone || '—'}
             </div>
             <div>
-              <span className="font-semibold">Contact :</span> {selectedRequest.contact_name} / {selectedRequest.contact_phone}
+              <span className="font-semibold">Adresse départ :</span>{' '}
+              {selectedRequest.pickup_label}
             </div>
             <div>
-              <span className="font-semibold">Note :</span> {selectedRequest.note || '—'}
+              <span className="font-semibold">Adresse arrivée :</span>{' '}
+              {selectedRequest.dropoff_label}
             </div>
             <div>
-              <span className="font-semibold">Véhicule :</span> {selectedRequest.vehicle_type}
+              <span className="font-semibold">Contact :</span>{' '}
+              {selectedRequest.contact_name} / {selectedRequest.contact_phone}
             </div>
             <div>
-              <span className="font-semibold">Statut :</span> {selectedRequest.status}
+              <span className="font-semibold">Note :</span>{' '}
+              {selectedRequest.note || '—'}
+            </div>
+            <div>
+              <span className="font-semibold">Véhicule :</span>{' '}
+              {selectedRequest.vehicle_type}
+            </div>
+            <div>
+              <span className="font-semibold">Statut :</span>{' '}
+              {selectedRequest.status}
             </div>
 
             <div className="pt-4 flex flex-wrap gap-2">
-              <button className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                Prendre en charge
+              <button
+                disabled
+                title="Action pas encore connectée"
+                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+              >
+                Prendre en charge · à venir
               </button>
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                Assigner un livreur
+              <button
+                disabled
+                title="Action pas encore connectée"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+              >
+                Assigner un livreur · à venir
               </button>
             </div>
           </div>
@@ -376,8 +425,8 @@ function RentalTab() {
       <h2 className="text-xl font-bold text-gray-900 mb-4">Locations</h2>
 
       <p className="text-sm text-gray-500">
-        Cette section permettra de superviser les réservations, les incidents
-        et les contacts propriétaires.
+        Cette section permettra de superviser les réservations, les incidents et
+        les contacts propriétaires.
       </p>
     </div>
   );
