@@ -8,6 +8,7 @@ const sections = [
   ['/dashboard', 'Vue d’ensemble', 'VE'],
   ['/operator', 'Opérations', 'OP'],
   ['/supervision', 'Supervision', 'SU'],
+  ['/cancellation-alerts', 'Annulations à examiner', 'AL'],
   ['/drivers', 'Chauffeurs VTC', 'VT'],
   ['/delivery-drivers', 'Livreurs', 'LI'],
   ['/locations', 'Locations', 'LO'],
@@ -85,7 +86,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const navigation = sections.filter(
     ([path]) =>
       (staff || ownerPaths.includes(path)) &&
-      (path !== '/supervision' ||
+      (!['/supervision', '/cancellation-alerts'].includes(path) ||
         user.is_superuser ||
         (user.is_staff && user.user_type === 'manager_staff'))
   );

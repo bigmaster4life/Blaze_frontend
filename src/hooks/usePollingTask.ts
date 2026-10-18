@@ -5,7 +5,8 @@ import { useEffect, useRef } from 'react';
 export function usePollingTask(
   task: () => Promise<void>,
   enabled: boolean,
-  delay: number
+  delay: number,
+  refreshKey?: string
 ) {
   const latest = useRef(task);
   useEffect(() => {
@@ -39,5 +40,5 @@ export function usePollingTask(
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', visible);
     };
-  }, [enabled, delay]);
+  }, [enabled, delay, refreshKey]);
 }
