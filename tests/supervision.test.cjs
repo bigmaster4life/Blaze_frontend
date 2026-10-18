@@ -1,0 +1,11 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const ts=require('typescript');
+const source=ts.transpileModule(fs.readFileSync('src/app/supervision/types.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+const mod={exports:{}};new Function('exports','module',source)(mod.exports,mod);
+const {fresh}=mod.exports;
+const now=Date.parse('2026-10-18T10:00:00Z');
+function partner(age,point=[0,0]){return {position:{coordinates:point,updated_at:new Date(now-age).toISOString(),fresh:true}};}
+test('GPS freshness expires even if polling stops and server flag stays true',()=>{assert.equal(fresh(partner(0),now),true);assert.equal(fresh(partner(120000),now),true);assert.equal(fresh(partner(120001),now),false);assert.equal(fresh(partner(-1000),now),false);});
+test('missing or invalid GPS timestamp cannot be displayed as current',()=>{assert.equal(fresh(partner(0,null),now),false);assert.equal(fresh({position:{coordinates:[0,0],updated_at:null}},now),false);assert.equal(fresh({position:{coordinates:[0,0],updated_at:'invalid'}},now),false);});
