@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import styles from "./restaurants.module.css";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import api, { apiErrorMessage } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -204,7 +205,7 @@ export default function RestaurantsPage() {
     );
   return (
     <main
-      className="page-wrap"
+      className={`page-wrap ${styles.workspace}`}
       style={{ maxWidth: 1200, margin: "auto", padding: 28 }}
     >
       <h1>Restaurants & repas</h1>
@@ -212,14 +213,25 @@ export default function RestaurantsPage() {
         Catalogue, préparation par Be et suivi des règlements. Les paiements
         électroniques clients restent désactivés.
       </p>
-      <div style={{ display: "flex", gap: 12, margin: "20px 0" }}>
-        <button className="button-primary" onClick={() => setTab("orders")}>
+      <div
+        style={{ display: "flex", flexWrap: "wrap", gap: 12, margin: "20px 0" }}
+      >
+        <button
+          className={tab === "orders" ? "button-primary" : "button-quiet"}
+          onClick={() => setTab("orders")}
+        >
           Commandes opérateur
         </button>
-        <button className="button-quiet" onClick={() => setTab("catalog")}>
+        <button
+          className={tab === "catalog" ? "button-primary" : "button-quiet"}
+          onClick={() => setTab("catalog")}
+        >
           Restaurants et menus
         </button>
-        <button className="button-quiet" onClick={() => setTab("balances")}>
+        <button
+          className={tab === "balances" ? "button-primary" : "button-quiet"}
+          onClick={() => setTab("balances")}
+        >
           Règlements et reversements
         </button>
         <button disabled={busy} onClick={() => void load()}>

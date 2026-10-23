@@ -1,0 +1,114 @@
+.workspace h1 {
+  font-size: 1.7rem;
+  font-weight: 750;
+  margin-bottom: 0.65rem;
+}
+.workspace h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 0.9rem;
+}
+.workspace h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 1rem 0 0.5rem;
+}
+.workspace p {
+  line-height: 1.6;
+  margin: 0.6rem 0;
+}
+.workspace form {
+  margin: 1.25rem 0;
+}
+.workspace label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.workspace label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.workspace input:not([type="checkbox"]),
+.workspace textarea,
+.workspace select {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 46px;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #cbd8cf;
+  border-radius: 10px;
+  color: #203a2d;
+  background: #fafcf9;
+  font: inherit;
+  font-weight: 400;
+}
+.workspace input[type="file"] {
+  font-size: 0.8rem;
+  overflow: hidden;
+}
+.workspace input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  accent-color: #326749;
+}
+.workspace textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.workspace input:focus-visible,
+.workspace textarea:focus-visible,
+.workspace select:focus-visible,
+.workspace button:focus-visible {
+  outline: 3px solid #a7cfb4;
+  outline-offset: 2px;
+}
+.workspace button {
+  border: 1px solid #d5dfd7;
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  background: #eef4ed;
+  color: #234d35;
+  font-size: 0.9rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.workspace button:global(.button-primary) {
+  background: #326749;
+  border-color: #326749;
+  color: #fff;
+}
+.workspace button:global(.button-quiet) {
+  background: #fff;
+}
+.workspace button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.workspace form > button {
+  align-self: end;
+  min-height: 46px;
+}
+.workspace summary {
+  cursor: pointer;
+  font-weight: 650;
+  padding: 0.6rem 0;
+}
+.workspace ul {
+  padding-left: 1.25rem;
+  list-style: disc;
+  margin: 0.8rem 0;
+}
+@media (max-width: 700px) {
+  .workspace {
+    padding: 16px !important;
+  }
+}
