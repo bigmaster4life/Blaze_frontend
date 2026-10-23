@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 const sections = [
   ['/dashboard', 'Vue d’ensemble', 'VE'],
   ['/operator', 'Opérations', 'OP'],
+  ['/restaurants', 'Restaurants & repas', 'RE'],
   ['/supervision', 'Supervision', 'SU'],
   ['/cancellation-alerts', 'Annulations à examiner', 'AL'],
   ['/drivers', 'Chauffeurs VTC', 'VT'],
@@ -86,7 +87,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const navigation = sections.filter(
     ([path]) =>
       (staff || ownerPaths.includes(path)) &&
-      (!['/supervision', '/cancellation-alerts'].includes(path) ||
+      (!['/supervision', '/cancellation-alerts', '/restaurants'].includes(path) ||
         user.is_superuser ||
         (user.is_staff && user.user_type === 'manager_staff'))
   );
