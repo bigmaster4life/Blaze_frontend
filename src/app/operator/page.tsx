@@ -1,11 +1,15 @@
-'use client';
-import { usePollingTask } from '@/hooks/usePollingTask';
+"use client";
+import { usePollingTask } from "@/hooks/usePollingTask";
 
-import { useEffect, useMemo, useState } from 'react';
-import api, { apiErrorMessage } from '@/utils/api';
-import Link from 'next/link';
+import { useEffect, useMemo, useState } from "react";
+import { apiErrorMessage } from "@/utils/api";
+import {
+  DeliveryOperatorRequest,
+  loadOperatorQueue,
+} from "@/utils/operatorQueue";
+import Link from "next/link";
 
-type TabKey = 'overview' | 'vtc' | 'delivery' | 'rental';
+type TabKey = "overview" | "vtc" | "delivery" | "rental";
 
 type StatCard = {
   label: string;
@@ -13,45 +17,31 @@ type StatCard = {
   color: string;
 };
 
-type DeliveryOperatorRequest = {
-  id: number;
-  type: string;
-  pickup_zone: string | null;
-  dropoff_zone: string | null;
-  pickup_label: string;
-  dropoff_label: string;
-  contact_name: string;
-  contact_phone: string;
-  note: string;
-  vehicle_type: string;
-  status: string;
-  created_at?: string;
-};
-
 const tabs: { key: TabKey; label: string }[] = [
-  { key: 'overview', label: 'Vue globale' },
-  { key: 'vtc', label: 'VTC' },
-  { key: 'delivery', label: 'Delivery' },
-  { key: 'rental', label: 'Location' },
+  { key: "overview", label: "Vue globale" },
+  { key: "vtc", label: "VTC" },
+  { key: "delivery", label: "Livraisons" },
+  { key: "rental", label: "Location" },
 ];
 
 export default function OperatorPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [deliveryRequests, setDeliveryRequests] = useState<
     DeliveryOperatorRequest[]
   >([]);
   const [deliveryLoading, setDeliveryLoading] = useState<boolean>(true);
-  const [deliveryError, setDeliveryError] = useState('');
+  const [deliveryError, setDeliveryError] = useState("");
+  const [page, setPage] = useState(1);
+  const [nextPage, setNextPage] = useState<number | null>(null);
+  const [deliveryCount, setDeliveryCount] = useState(0);
 
   const loadDeliveryRequests = async (): Promise<void> => {
     try {
-      const { data } = await api.get<DeliveryOperatorRequest[]>(
-        '/delivery/operator-queue/'
-      );
-      if (!Array.isArray(data))
-        throw new Error('La liste des demandes est indisponible.');
-      setDeliveryRequests(data);
-      setDeliveryError('');
+      const { items, count, nextPage: next } = await loadOperatorQueue(page);
+      setDeliveryRequests(items);
+      setDeliveryCount(count);
+      setNextPage(next);
+      setDeliveryError("");
     } catch (error: unknown) {
       setDeliveryError(apiErrorMessage(error));
     } finally {
@@ -59,40 +49,39 @@ export default function OperatorPage() {
     }
   };
 
-  usePollingTask(loadDeliveryRequests, true, 10000);
+  usePollingTask(loadDeliveryRequests, true, 10000, String(page));
 
   const stats = useMemo<StatCard[]>(
     () => [
       {
-        label: 'Demandes VTC en attente',
+        label: "Demandes VTC en attente",
         value: null,
-        color: 'bg-orange-100 text-orange-700',
+        color: "bg-orange-100 text-orange-700",
       },
       {
-        label: 'Demandes Delivery opérateur',
-        value:
-          deliveryError || deliveryLoading ? null : deliveryRequests.length,
-        color: 'bg-red-100 text-red-700',
+        label: "Demandes Delivery opérateur",
+        value: deliveryError || deliveryLoading ? null : deliveryCount,
+        color: "bg-red-100 text-red-700",
       },
       {
-        label: 'Courses en cours',
+        label: "Courses en cours",
         value: null,
-        color: 'bg-blue-100 text-blue-700',
+        color: "bg-blue-100 text-blue-700",
       },
       {
-        label: 'Incidents Location',
+        label: "Incidents Location",
         value: null,
-        color: 'bg-purple-100 text-purple-700',
+        color: "bg-purple-100 text-purple-700",
       },
     ],
-    [deliveryRequests.length, deliveryError, deliveryLoading]
+    [deliveryCount, deliveryError, deliveryLoading]
   );
 
   return (
     <div className="space-y-6">
       <div>
         <Link
-          href="/"
+          href="/dashboard"
           className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
         >
           ← Retour au dashboard
@@ -100,7 +89,9 @@ export default function OperatorPage() {
       </div>
 
       <div className="rounded-2xl bg-white shadow-sm border p-6">
-        <h1 className="text-3xl font-bold text-gray-900">Operator Center</h1>
+        <h1 className="text-3xl font-bold text-gray-900">
+          Centre des opérations
+        </h1>
         <p className="text-gray-600 mt-2">
           Consultez la file des livraisons nécessitant une intervention. Les
           indicateurs VTC et location restent à connecter.
@@ -109,7 +100,7 @@ export default function OperatorPage() {
 
       {deliveryError && (
         <div className="notice-error" role="alert">
-          {deliveryError}{' '}
+          {deliveryError}{" "}
           <button
             className="button-quiet"
             onClick={() => void loadDeliveryRequests()}
@@ -127,9 +118,9 @@ export default function OperatorPage() {
             <div
               className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${item.color}`}
             >
-              {deliveryLoading && item.label === 'Demandes Delivery opérateur'
-                ? '…'
-                : item.value ?? 'Non disponible'}
+              {deliveryLoading && item.label === "Demandes Delivery opérateur"
+                ? "…"
+                : item.value ?? "Non disponible"}
             </div>
             <p className="mt-3 text-sm text-gray-600">{item.label}</p>
           </div>
@@ -146,8 +137,8 @@ export default function OperatorPage() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
                   active
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
                 {tab.label}
@@ -157,22 +148,28 @@ export default function OperatorPage() {
         </div>
       </div>
 
-      {activeTab === 'overview' && (
+      {activeTab === "overview" && (
         <OverviewTab
           deliveryCount={
-            deliveryError || deliveryLoading ? null : deliveryRequests.length
+            deliveryError || deliveryLoading ? null : deliveryCount
           }
         />
       )}
-      {activeTab === 'vtc' && <VtcTab />}
-      {activeTab === 'delivery' && (
+      {activeTab === "vtc" && <VtcTab />}
+      {activeTab === "delivery" && (
         <DeliveryTab
           requests={deliveryRequests}
           loading={deliveryLoading}
           onRefresh={loadDeliveryRequests}
+          page={page}
+          nextPage={nextPage}
+          onPage={(value) => {
+            setDeliveryLoading(true);
+            setPage(value);
+          }}
         />
       )}
-      {activeTab === 'rental' && <RentalTab />}
+      {activeTab === "rental" && <RentalTab />}
     </div>
   );
 }
@@ -201,7 +198,7 @@ function OverviewTab({ deliveryCount }: { deliveryCount: number | null }) {
               manuelles et les suivis sensibles.
             </p>
             <p className="mt-2 text-sm font-semibold text-red-600">
-              {deliveryCount ?? '—'} demande(s) nécessitent une attention
+              {deliveryCount ?? "—"} demande(s) nécessitent une attention
               opérateur.
             </p>
           </div>
@@ -221,7 +218,7 @@ function OverviewTab({ deliveryCount }: { deliveryCount: number | null }) {
 
         <div className="space-y-3 text-sm text-gray-600">
           <div className="rounded-xl bg-red-50 border border-red-100 p-4">
-            Delivery operator_required / failed : {deliveryCount ?? '—'}
+            Delivery operator_required / failed : {deliveryCount ?? "—"}
           </div>
           <div className="rounded-xl bg-orange-50 border border-orange-100 p-4">
             VTC sans chauffeur
@@ -252,9 +249,19 @@ type DeliveryTabProps = {
   requests: DeliveryOperatorRequest[];
   loading: boolean;
   onRefresh: () => Promise<void>;
+  page: number;
+  nextPage: number | null;
+  onPage: (page: number) => void;
 };
 
-function DeliveryTab({ requests, loading, onRefresh }: DeliveryTabProps) {
+function DeliveryTab({
+  requests,
+  loading,
+  onRefresh,
+  page,
+  nextPage,
+  onPage,
+}: DeliveryTabProps) {
   const [selectedRequest, setSelectedRequest] =
     useState<DeliveryOperatorRequest | null>(null);
 
@@ -312,8 +319,8 @@ function DeliveryTab({ requests, loading, onRefresh }: DeliveryTabProps) {
                     <td className="px-4 py-3 font-semibold">{request.id}</td>
 
                     <td className="px-4 py-3">
-                      {request.pickup_zone || '—'} →{' '}
-                      {request.dropoff_zone || '—'}
+                      {request.pickup_zone || "—"} →{" "}
+                      {request.dropoff_zone || "—"}
                     </td>
 
                     <td className="px-4 py-3">{request.vehicle_type}</td>
@@ -342,6 +349,25 @@ function DeliveryTab({ requests, loading, onRefresh }: DeliveryTabProps) {
             </table>
           </div>
         )}
+        {(page > 1 || nextPage) && (
+          <div className="flex gap-3 mt-4">
+            <button
+              className="button-quiet"
+              disabled={loading || page === 1}
+              onClick={() => onPage(page - 1)}
+            >
+              Précédent
+            </button>
+            <span>Page {page}</span>
+            <button
+              className="button-quiet"
+              disabled={loading || !nextPage}
+              onClick={() => nextPage && onPage(nextPage)}
+            >
+              Suivant
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl bg-white border shadow-sm p-6">
@@ -360,39 +386,39 @@ function DeliveryTab({ requests, loading, onRefresh }: DeliveryTabProps) {
               <span className="font-semibold">ID :</span> {selectedRequest.id}
             </div>
             <div>
-              <span className="font-semibold">Type :</span>{' '}
+              <span className="font-semibold">Type :</span>{" "}
               {selectedRequest.type}
             </div>
             <div>
-              <span className="font-semibold">Zone récupération :</span>{' '}
-              {selectedRequest.pickup_zone || '—'}
+              <span className="font-semibold">Zone récupération :</span>{" "}
+              {selectedRequest.pickup_zone || "—"}
             </div>
             <div>
-              <span className="font-semibold">Zone livraison :</span>{' '}
-              {selectedRequest.dropoff_zone || '—'}
+              <span className="font-semibold">Zone livraison :</span>{" "}
+              {selectedRequest.dropoff_zone || "—"}
             </div>
             <div>
-              <span className="font-semibold">Adresse départ :</span>{' '}
+              <span className="font-semibold">Adresse départ :</span>{" "}
               {selectedRequest.pickup_label}
             </div>
             <div>
-              <span className="font-semibold">Adresse arrivée :</span>{' '}
+              <span className="font-semibold">Adresse arrivée :</span>{" "}
               {selectedRequest.dropoff_label}
             </div>
             <div>
-              <span className="font-semibold">Contact :</span>{' '}
+              <span className="font-semibold">Contact :</span>{" "}
               {selectedRequest.contact_name} / {selectedRequest.contact_phone}
             </div>
             <div>
-              <span className="font-semibold">Note :</span>{' '}
-              {selectedRequest.note || '—'}
+              <span className="font-semibold">Note :</span>{" "}
+              {selectedRequest.note || "—"}
             </div>
             <div>
-              <span className="font-semibold">Véhicule :</span>{' '}
+              <span className="font-semibold">Véhicule :</span>{" "}
               {selectedRequest.vehicle_type}
             </div>
             <div>
-              <span className="font-semibold">Statut :</span>{' '}
+              <span className="font-semibold">Statut :</span>{" "}
               {selectedRequest.status}
             </div>
 

@@ -1,0 +1,29 @@
+.map {
+  position: relative;
+  isolation: isolate;
+  background: #e9eee8;
+}
+/* Loaded map tiles must remain opaque; WebKit compositing can otherwise leave gaps. */
+.map :global(img.leaflet-tile) {
+  mix-blend-mode: normal;
+  image-rendering: auto;
+}
+.map :global(img.leaflet-tile-loaded) {
+  opacity: 1 !important;
+}
+.notice {
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  border-top: 1px solid #dce4dc;
+  background: #f4f7f3;
+}
+.notice button {
+  margin-left: 12px;
+  padding: 8px 12px;
+  border: 1px solid #afc6b6;
+  border-radius: 8px;
+  background: white;
+  color: #245238;
+  font-weight: 600;
+}
